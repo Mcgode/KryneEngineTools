@@ -174,51 +174,140 @@ int main(int _argc, const char** _argv)
 
     slang::ShaderReflection* reflection = slang::ShaderReflection::get(request);
 
-    const u32 entryPointCount = reflection->getEntryPointCount();
-    for (u32 i = 0; i < entryPointCount; i++)
+//    const u32 entryPointCount = reflection->getEntryPointCount();
+//    for (u32 i = 0; i < entryPointCount; i++)
+//    {
+//        slang::EntryPointReflection* entryPoint = reflection->getEntryPointByIndex(i);
+//        printf("Entry point %d: '%s'\n", i, entryPoint->getName());
+//
+//        printf("Shader type: %s\n", GetStageName(entryPoint->getStage()));
+//
+//        const u32 parameterCount = entryPoint->getParameterCount();
+//        printf("Parameter count: %d\n", parameterCount);
+//        for (u32 j = 0; j < parameterCount; j++) {
+//            slang::VariableLayoutReflection* parameter = entryPoint->getParameterByIndex(j);
+//
+//            printf(" - %s: %s\n", parameter->getName(), GetTypeString(parameter->getTypeLayout(), parameter->getBindingIndex()).c_str());
+//        }
+//        printf("\n");
+//    }
+//
+//    printf("Parameters:\n");
+//    for (u32 i = 0; i < reflection->getParameterCount(); i++)
+//    {
+//        slang::VariableLayoutReflection* parameter = reflection->getParameterByIndex(i);
+//        printf("- %s: %s\n", parameter->getName(), GetTypeString(parameter->getTypeLayout()).c_str());
+//    }
+//    printf("\n");
+//
+//    printf("Types:\n");
+//    for (u32 j = 0; j < structTypes.size(); j++) {
+//        slang::TypeLayoutReflection* type = structTypes[j];
+//        printf("- %s: %s", type->getName(), GetKindName(type->getKind()));
+//
+//        if (type->getKind() == slang::TypeReflection::Kind::Struct) {
+//            printf("\n\t{\n");
+//
+//            for (u32 i = 0; i < type->getFieldCount(); i++) {
+//                slang::VariableLayoutReflection* field = type->getFieldByIndex(i);
+//                printf("\t\t%s: %s", field->getName(), GetTypeString(field->getTypeLayout()).c_str());
+//                if (field->getSemanticName() != nullptr)
+//                {
+//                    printf(": %s%zu", field->getSemanticName(), field->getSemanticIndex());
+//                }
+//
+//                printf("; binding: (%u, %zu)", field->getBindingIndex(), field->getBindingSpace(SLANG_PARAMETER_CATEGORY_GENERIC));
+//
+//                printf(";\n");
+//            }
+//
+//            printf("\t}");
+//        }
+//
+//        printf("\n");
+//    }
+
+    eastl::vector<slang::VariableLayoutReflection*> globalParameterBlocks;
+    eastl::vector<slang::VariableLayoutReflection*> globalPushConstants;
+
+    globalParameterBlocks.reserve(reflection->getParameterCount());
+
+    for (u32 i = 0; i < reflection->getParameterCount(); i++)
     {
-        slang::EntryPointReflection* entryPoint = reflection->getEntryPointByIndex(i);
-        printf("Entry point %d: '%s'\n", i, entryPoint->getName());
-
-        printf("Shader type: %s\n", GetStageName(entryPoint->getStage()));
-
-        const u32 parameterCount = entryPoint->getParameterCount();
-        printf("Parameter count: %d\n", parameterCount);
-        for (u32 j = 0; j < parameterCount; j++) {
-            slang::VariableLayoutReflection* parameter = entryPoint->getParameterByIndex(j);
-
-            printf(" - %s: %s\n", parameter->getName(), GetTypeString(parameter->getTypeLayout()).c_str());
+        slang::VariableLayoutReflection* parameter = reflection->getParameterByIndex(i);
+        slang::TypeLayoutReflection* type = parameter->getTypeLayout();
+        if (type->getKind() == slang::TypeReflection::Kind::ParameterBlock)
+        {
+            globalParameterBlocks.push_back(parameter);
         }
-        printf("\n");
+        else if (parameter->getCategory() == slang::PushConstantBuffer)
+        {
+            globalPushConstants.push_back(parameter);
+        }
     }
 
-#define FOO "Types:\n");
+    struct EntryPointReflection
+    {
+        const char* m_name = nullptr;
+        eastl::vector<slang::VariableLayoutReflection*> m_descriptorSets;
+        eastl::vector<slang::VariableLayoutReflection*> m_pushConstants;
+    };
+    eastl::vector<EntryPointReflection> entryPoints;
+    entryPoints.reserve(reflection->getEntryPointCount());
 
-    printf( FOO
-    for (u32 j = 0; j < structTypes.size(); j++) {
-        slang::TypeLayoutReflection* type = structTypes[j];
-        printf("- %s: %s", type->getName(), GetKindName(type->getKind()));
+    for (u32 i = 0; i < reflection->getEntryPointCount(); i++)
+    {
+        slang::EntryPointReflection* entryPoint = reflection->getEntryPointByIndex(i);
+        EntryPointReflection& entryPointReflection = entryPoints.emplace_back();
+        entryPointReflection.m_name = entryPoint->getName();
 
-        if (type->getKind() == slang::TypeReflection::Kind::Struct) {
-            printf("\n\t{\n");
+        entryPointReflection.m_descriptorSets = globalParameterBlocks;
+        entryPointReflection.m_pushConstants = globalPushConstants;
 
-            for (u32 i = 0; i < type->getFieldCount(); i++) {
-                slang::VariableLayoutReflection* field = type->getFieldByIndex(i);
-                printf("\t\t%s: %s", field->getName(), GetTypeString(field->getTypeLayout()).c_str());
-                if (field->getSemanticName() != nullptr)
-                {
-                    printf(": %s%zu", field->getSemanticName(), field->getSemanticIndex());
-                }
-
-                printf("; binding: (%u, %u)", field->getBindingIndex(), field->getBindingSpace(SLANG_PARAMETER_CATEGORY_GENERIC));
-
-                printf(";\n");
+        for (u32 j = 0; j < entryPoint->getParameterCount(); j++)
+        {
+            slang::VariableLayoutReflection* parameter = entryPoint->getParameterByIndex(j);
+            slang::TypeLayoutReflection* type = parameter->getTypeLayout();
+            if (type->getKind() == slang::TypeReflection::Kind::ParameterBlock)
+            {
+                entryPointReflection.m_descriptorSets.push_back(parameter);
             }
+            else if (parameter->getCategory() == slang::Uniform || parameter->getCategory() == slang::PushConstantBuffer)
+            {
+                entryPointReflection.m_pushConstants.push_back(parameter);
+            }
+        }
+    }
 
-            printf("\t}");
+    printf("Entry points:\n");
+    for (const auto& entryPoint : entryPoints)
+    {
+        printf("- %s:\n", entryPoint.m_name);
+        if (entryPoint.m_descriptorSets.empty())
+        {
+            printf("\tNo descriptor sets\n");
+        }
+        else
+        {
+            printf("\tDescriptor sets:\n");
+            for (const auto& descriptorSet : entryPoint.m_descriptorSets)
+            {
+                printf("\t - %s\n", descriptorSet->getName());
+            }
         }
 
-        printf("\n");
+        if (entryPoint.m_pushConstants.empty())
+        {
+            printf("\tNo push constants\n");
+        }
+        else
+        {
+            printf("\tPush constants:\n");
+            for (const auto& pushConstant : entryPoint.m_pushConstants)
+            {
+                printf("\t - %s\n", pushConstant->getName());
+            }
+        }
     }
 
     spDestroyCompileRequest(request);
