@@ -278,6 +278,12 @@ int main(int _argc, const char** _argv)
                 entryPointReflection.m_pushConstants.push_back(parameter);
             }
         }
+
+        if (entryPointReflection.m_pushConstants.size() > 1)
+        {
+            ErrorCallback("Multiple push constants in entry point, only one push constant is supported.", nullptr);
+            return 1;
+        }
     }
 
     printf("Entry points:\n");
