@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <KryneEngine/Core/Common/Types.hpp>
+#include <KryneEngine/Core/Graphics/Common/ShaderPipeline.hpp>
 #include <slang.h>
 
 using namespace KryneEngine;
