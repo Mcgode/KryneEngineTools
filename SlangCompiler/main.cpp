@@ -241,7 +241,7 @@ int main(int _argc, const char** _argv)
         {
             globalParameterBlocks.push_back(parameter);
         }
-        else if (parameter->getCategory() == slang::PushConstantBuffer)
+        else if (parameter->getCategory() == slang::PushConstantBuffer || type->getKind() == slang::TypeReflection::Kind::ConstantBuffer)
         {
             globalPushConstants.push_back(parameter);
         }
