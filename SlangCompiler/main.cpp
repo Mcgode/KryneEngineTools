@@ -299,7 +299,18 @@ int main(int _argc, const char** _argv)
             printf("\tDescriptor sets:\n");
             for (const auto& descriptorSet : entryPoint.m_descriptorSets)
             {
-                printf("\t - %s: set %d\n", descriptorSet->getName(), descriptorSet->getBindingIndex());
+                printf("\t - `%s`: set %d\n", descriptorSet->getName(), descriptorSet->getBindingIndex());
+
+                slang::TypeLayoutReflection* elementType = descriptorSet->getTypeLayout()->getElementTypeLayout();
+
+                if (elementType->getKind() == slang::TypeReflection::Kind::Struct)
+                {
+                    for (u32 i = 0; i < elementType->getFieldCount(); i++)
+                    {
+                        slang::VariableLayoutReflection* field = elementType->getFieldByIndex(i);
+                        printf("\t\t- `%s`: binding %u\n", field->getName(), field->getBindingIndex());
+                    }
+                }
             }
         }
 
@@ -309,11 +320,11 @@ int main(int _argc, const char** _argv)
         }
         else
         {
-            printf("\tPush constants:\n");
+            printf("\tPush constants: ");
             for (const auto& pushConstant : entryPoint.m_pushConstants)
             {
                 const size_t sizeInBytes = pushConstant->getTypeLayout()->getSize(pushConstant->getCategory());
-                printf("\t - %s: size %zu\n", pushConstant->getName(), sizeInBytes);
+                printf("`%s` (size %zu)\n", pushConstant->getName(), sizeInBytes);
             }
         }
     }
