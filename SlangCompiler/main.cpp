@@ -299,7 +299,7 @@ int main(int _argc, const char** _argv)
             printf("\tDescriptor sets:\n");
             for (const auto& descriptorSet : entryPoint.m_descriptorSets)
             {
-                printf("\t - %s\n", descriptorSet->getName());
+                printf("\t - %s: set %d\n", descriptorSet->getName(), descriptorSet->getBindingIndex());
             }
         }
 
