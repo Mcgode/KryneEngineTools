@@ -4,6 +4,7 @@
  * @date 30/11/2024.
  */
 
+#include <cstring>
 #include <iostream>
 #include <KryneEngine/Core/Common/Types.hpp>
 #include <KryneEngine/Core/Graphics/Common/ShaderPipeline.hpp>
@@ -14,6 +15,52 @@ using namespace KryneEngine;
 static void ErrorCallback(const char* _message, void*)
 {
     std::cerr << _message << std::endl;
+}
+
+enum class TargetApi
+{
+    Vulkan,
+    DirectX12,
+    Metal,
+};
+
+struct ArgumentsInformation
+{
+    TargetApi m_targetApi = TargetApi::Vulkan;
+};
+
+ArgumentsInformation ParseCommandLineArguments(int _argc, const char** _argv, eastl::vector<const char*>& _args)
+{
+    ArgumentsInformation argumentsInformation {};
+
+    for (int i = 1; i < _argc; i++)
+    {
+        if (strcmp(_argv[i], "-target") == 0)
+        {
+            _args.push_back(_argv[i]);
+            i++;
+            const char* target = _argv[i];
+            if (strcmp(target, "spirv") == 0 || strcmp(target, "glsl") == 0)
+            {
+                argumentsInformation.m_targetApi = TargetApi::Vulkan;
+            }
+            else if (strcmp(target, "hlsl") == 0 || strcmp(target, "dxil") == 0)
+            {
+                argumentsInformation.m_targetApi = TargetApi::DirectX12;
+            }
+            else if (strcmp(target, "metal") == 0 || strcmp(target, "metallib") == 0)
+            {
+                argumentsInformation.m_targetApi = TargetApi::Metal;
+            }
+            else
+            {
+                ErrorCallback("Unsupported target", nullptr);
+            }
+        }
+        _args.push_back(_argv[i]);
+    }
+
+    return argumentsInformation;
 }
 
 int main(int _argc, const char** _argv)
@@ -30,8 +77,11 @@ int main(int _argc, const char** _argv)
     spSetDiagnosticCallback(request, ErrorCallback, nullptr);
     request->setCommandLineCompilerMode();
 
-    const SlangResult argParseResult = spProcessCommandLineArguments(request, _argv + 1, _argc - 1);
+    eastl::vector<const char*> args;
+    args.reserve(_argc - 1);
+    ArgumentsInformation argInfo = ParseCommandLineArguments(_argc, _argv, args);
 
+    const SlangResult argParseResult = spProcessCommandLineArguments(request, args.data(), (s32)args.size());
     if (SLANG_FAILED(argParseResult))
     {
         spDestroyCompileRequest(request);
