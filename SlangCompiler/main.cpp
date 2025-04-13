@@ -63,6 +63,96 @@ ArgumentsInformation ParseCommandLineArguments(int _argc, const char** _argv, ea
     return argumentsInformation;
 }
 
+eastl::pair<DescriptorBindingDesc::Type, TextureTypes> ParseDescriptorBindingType(slang::VariableLayoutReflection* _reflection)
+{
+    slang::TypeLayoutReflection* typeLayout = _reflection->getTypeLayout();
+
+    if (typeLayout->getKind() == slang::TypeReflection::Kind::ConstantBuffer)
+    {
+        return { DescriptorBindingDesc::Type::ConstantBuffer, TextureTypes::Single2D };
+    }
+    else if (typeLayout->getKind() == slang::TypeReflection::Kind::SamplerState)
+    {
+        return { DescriptorBindingDesc::Type::Sampler, TextureTypes::Single2D };
+    }
+
+    const u32 resourceShape = typeLayout->getResourceShape();
+    const u32 baseShape = resourceShape & SLANG_RESOURCE_BASE_SHAPE_MASK;
+    const u32 shapeFlags = resourceShape & SLANG_RESOURCE_EXT_SHAPE_MASK;
+    const SlangResourceAccess access = typeLayout->getResourceAccess();
+
+    DescriptorBindingDesc::Type bindingType = DescriptorBindingDesc::Type::SampledTexture;
+
+    switch (baseShape)
+    {
+    case SLANG_TEXTURE_1D:
+    case SLANG_TEXTURE_2D:
+    case SLANG_TEXTURE_3D:
+    case SLANG_TEXTURE_CUBE:
+        {
+            switch (access)
+            {
+            case SLANG_RESOURCE_ACCESS_READ:
+                bindingType = DescriptorBindingDesc::Type::SampledTexture;
+                break;
+            case SLANG_RESOURCE_ACCESS_READ_WRITE:
+            case SLANG_RESOURCE_ACCESS_WRITE:
+                bindingType = DescriptorBindingDesc::Type::StorageReadWriteTexture;
+                break;
+            default:
+                KE_ERROR("Unsupported access");
+                break;
+            }
+            break;
+        }
+    case SLANG_STRUCTURED_BUFFER:
+    case SLANG_BYTE_ADDRESS_BUFFER:
+        {
+            switch (access)
+            {
+            case SLANG_RESOURCE_ACCESS_READ:
+                bindingType = DescriptorBindingDesc::Type::StorageReadOnlyBuffer;
+                break;
+            case SLANG_RESOURCE_ACCESS_READ_WRITE:
+            case SLANG_RESOURCE_ACCESS_WRITE:
+                bindingType = DescriptorBindingDesc::Type::StorageReadWriteBuffer;
+                break;
+            default:
+                KE_ERROR("Unsupported access");
+                break;
+            }
+            break;
+        }
+    default:
+        break;
+    }
+
+    TextureTypes textureType = TextureTypes::Single2D;
+    if (bindingType < DescriptorBindingDesc::Type::StorageReadOnlyBuffer)
+    {
+        switch (baseShape)
+        {
+            case SLANG_TEXTURE_1D:
+                textureType = (shapeFlags & SLANG_TEXTURE_ARRAY_FLAG) ? TextureTypes::Array1D : TextureTypes::Single1D;
+                break;
+            case SLANG_TEXTURE_2D:
+                textureType = (shapeFlags & SLANG_TEXTURE_ARRAY_FLAG) ? TextureTypes::Array2D : TextureTypes::Single2D;
+                break;
+            case SLANG_TEXTURE_3D:
+                textureType = TextureTypes::Single3D;
+                break;
+            case SLANG_TEXTURE_CUBE:
+                textureType = (shapeFlags & SLANG_TEXTURE_ARRAY_FLAG) ? TextureTypes::ArrayCube : TextureTypes::SingleCube;
+                break;
+            default:
+                KE_ERROR("Unreachable");
+                break;
+        }
+    }
+
+    return { bindingType, textureType };
+}
+
 int main(int _argc, const char** _argv)
 {
     SlangSession* session = nullptr;
@@ -173,7 +263,65 @@ int main(int _argc, const char** _argv)
                     for (u32 i = 0; i < elementType->getFieldCount(); i++)
                     {
                         slang::VariableLayoutReflection* field = elementType->getFieldByIndex(i);
-                        printf("\t\t- `%s`: binding %u\n", field->getName(), field->getBindingIndex());
+
+                        const auto [bindingType, textureType] = ParseDescriptorBindingType(field);
+                        const char* bindingTypeString = "";
+                        const char* textureTypeString = "";
+
+                        switch (bindingType)
+                        {
+                        case DescriptorBindingDesc::Type::Sampler:
+                            bindingTypeString = "Sampler";
+                            break;
+                        case DescriptorBindingDesc::Type::SampledTexture:
+                            bindingTypeString = "Sampled texture";
+                            break;
+                        case DescriptorBindingDesc::Type::StorageReadOnlyTexture:
+                            bindingTypeString = "Read-only texture";
+                            break;
+                        case DescriptorBindingDesc::Type::StorageReadWriteTexture:
+                            bindingTypeString = "Read/write buffer";
+                            break;
+                        case DescriptorBindingDesc::Type::ConstantBuffer:
+                            bindingTypeString = "Constant buffer";
+                            break;
+                        case DescriptorBindingDesc::Type::StorageReadOnlyBuffer:
+                            bindingTypeString = "Read-only buffer";
+                            break;
+                        case DescriptorBindingDesc::Type::StorageReadWriteBuffer:
+                            bindingTypeString = "Read/write buffer";
+                            break;
+                        }
+
+                        if (bindingType >= DescriptorBindingDesc::Type::SampledTexture && bindingType <= DescriptorBindingDesc::Type::StorageReadWriteTexture)
+                        {
+                            switch (textureType)
+                            {
+                            case TextureTypes::Single1D:
+                                textureTypeString = " (1D)";
+                                break;
+                            case TextureTypes::Single2D:
+                                textureTypeString = " (2D)";
+                                break;
+                            case TextureTypes::Single3D:
+                                textureTypeString = " (3D)";
+                                break;
+                            case TextureTypes::Array1D:
+                                textureTypeString = " (1D array)";
+                                break;
+                            case TextureTypes::Array2D:
+                                textureTypeString = " (2D array)";
+                                break;
+                            case TextureTypes::SingleCube:
+                                textureTypeString = " (cube)";
+                                break;
+                            case TextureTypes::ArrayCube:
+                                textureTypeString = " (cube array)";
+                                break;
+                            }
+                        }
+
+                        printf("\t\t- `%s`: %s%s, binding %u\n", field->getName(), bindingTypeString, textureTypeString, field->getBindingIndex());
                     }
                 }
             }
