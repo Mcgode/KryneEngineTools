@@ -312,7 +312,8 @@ int main(int _argc, const char** _argv)
             printf("\tPush constants:\n");
             for (const auto& pushConstant : entryPoint.m_pushConstants)
             {
-                printf("\t - %s\n", pushConstant->getName());
+                const size_t sizeInBytes = pushConstant->getTypeLayout()->getSize(pushConstant->getCategory());
+                printf("\t - %s: size %zu\n", pushConstant->getName(), sizeInBytes);
             }
         }
     }
