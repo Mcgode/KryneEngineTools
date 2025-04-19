@@ -8,6 +8,7 @@
 #include <iostream>
 #include <KryneEngine/Core/Common/Types.hpp>
 #include <KryneEngine/Core/Graphics/Common/ShaderPipeline.hpp>
+#include <KryneEngine/Modules/ShaderReflection/Blob.hpp>
 #include <slang.h>
 
 using namespace KryneEngine;
@@ -211,11 +212,54 @@ int main(int _argc, const char** _argv)
     eastl::vector<EntryPointReflection> entryPoints;
     entryPoints.reserve(reflection->getEntryPointCount());
 
+    eastl::vector<Modules::ShaderReflection::DescriptorInput> descriptorInputs;
+    eastl::vector<Modules::ShaderReflection::DescriptorSetInput> descriptorSetsInputs;
+    eastl::vector<Modules::ShaderReflection::EntryPointInput> entryPointsInputs;
+
+    size_t totalSets = 0;
+    size_t totalDescriptors = 0;
+
+    entryPointsInputs.reserve(reflection->getEntryPointCount());
+
     for (u32 i = 0; i < reflection->getEntryPointCount(); i++)
     {
         slang::EntryPointReflection* entryPoint = reflection->getEntryPointByIndex(i);
         EntryPointReflection& entryPointReflection = entryPoints.emplace_back();
         entryPointReflection.m_name = entryPoint->getName();
+
+        Modules::ShaderReflection::EntryPointInput& entryPointInput = entryPointsInputs.push_back();;
+        entryPointInput.m_name = entryPointReflection.m_name;
+
+        switch (entryPoint->getStage())
+        {
+        case SLANG_STAGE_VERTEX:
+            entryPointInput.m_stage = ShaderStage::Stage::Vertex;
+            break;
+        case SLANG_STAGE_HULL:
+            entryPointInput.m_stage = ShaderStage::Stage::TesselationControl;
+            break;
+        case SLANG_STAGE_DOMAIN:
+            entryPointInput.m_stage = ShaderStage::Stage::TesselationEvaluation;
+            break;
+        case SLANG_STAGE_GEOMETRY:
+            entryPointInput.m_stage = ShaderStage::Stage::Geometry;
+            break;
+        case SLANG_STAGE_FRAGMENT:
+            entryPointInput.m_stage = ShaderStage::Stage::Fragment;
+            break;
+        case SLANG_STAGE_COMPUTE:
+            entryPointInput.m_stage = ShaderStage::Stage::Compute;
+            break;
+        case SLANG_STAGE_MESH:
+            entryPointInput.m_stage = ShaderStage::Stage::Mesh;
+            break;
+        case SLANG_STAGE_AMPLIFICATION:
+            entryPointInput.m_stage = ShaderStage::Stage::Task;
+            break;
+        default:
+            ErrorCallback("Unsupported stage", nullptr);
+            return 1;
+        }
 
         entryPointReflection.m_descriptorSets = globalParameterBlocks;
         entryPointReflection.m_pushConstants = globalPushConstants;
@@ -239,6 +283,61 @@ int main(int _argc, const char** _argv)
             ErrorCallback("Multiple push constants in entry point, only one push constant is supported.", nullptr);
             return 1;
         }
+
+        if (!entryPointReflection.m_pushConstants.empty())
+        {
+            entryPointInput.m_pushConstants->m_name = entryPointReflection.m_pushConstants[0]->getName();
+            entryPointInput.m_pushConstants->m_size = entryPointReflection.m_pushConstants[0]->getTypeLayout()->getSize(entryPointReflection.m_pushConstants[0]->getCategory());
+        }
+
+        for (auto* descriptorSet : entryPoints[i].m_descriptorSets)
+        {
+            totalSets++;
+            slang::TypeLayoutReflection* elementType = descriptorSet->getTypeLayout()->getElementTypeLayout();
+            totalDescriptors += elementType->getFieldCount();
+        }
+    }
+
+    descriptorSetsInputs.reserve(totalSets);
+    descriptorInputs.reserve(totalDescriptors);
+
+    for (auto i = 0u; i < entryPoints.size(); i++)
+    {
+        const size_t descriptorSetBegin = descriptorInputs.size();
+
+        for (auto* descriptorSet : entryPoints[i].m_descriptorSets)
+        {
+            Modules::ShaderReflection::DescriptorSetInput& descriptorSetInput = descriptorSetsInputs.push_back();
+            descriptorSetInput.m_name = descriptorSet->getName();
+
+            const size_t descriptorBegin = descriptorInputs.size();
+
+            slang::TypeLayoutReflection* elementType = descriptorSet->getTypeLayout()->getElementTypeLayout();
+            for (u32 k = 0; k < elementType->getFieldCount(); k++)
+            {
+                slang::VariableLayoutReflection* field = elementType->getFieldByIndex(k);
+                Modules::ShaderReflection::DescriptorInput& descriptorInput = descriptorInputs.push_back();
+                const auto [bindingType, textureType] = ParseDescriptorBindingType(field);
+                descriptorInput.m_name = field->getName();
+                descriptorInput.m_bindingIndex = field->getBindingIndex();
+                descriptorInput.m_type = bindingType;
+                descriptorInput.m_textureType = textureType;
+            }
+
+            const size_t descriptorEnd = descriptorInputs.size();
+
+            descriptorSetInput.m_descriptors = {
+                descriptorInputs.data() + descriptorBegin,
+                descriptorInputs.data() + descriptorEnd
+            };
+        }
+
+        const size_t descriptorSetEnd = descriptorSetsInputs.size();
+
+        entryPointsInputs[i].m_descriptorSets = {
+            descriptorSetsInputs.data() + descriptorSetBegin,
+            descriptorSetsInputs.data() + descriptorSetEnd
+        };
     }
 
     printf("Entry points:\n");
@@ -341,6 +440,8 @@ int main(int _argc, const char** _argv)
             }
         }
     }
+
+    Modules::ShaderReflection::Blob* blob = Modules::ShaderReflection::Blob::CreateBlob(AllocatorInstance(), entryPointsInputs);
 
     spDestroyCompileRequest(request);
 
