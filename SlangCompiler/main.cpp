@@ -303,6 +303,12 @@ int main(int _argc, const char** _argv)
 
     for (auto i = 0u; i < entryPoints.size(); i++)
     {
+        if (entryPoints[i].m_descriptorSets.empty())
+        {
+            entryPointsInputs[i].m_descriptorSets = {};
+            continue;
+        }
+
         const size_t descriptorSetBegin = descriptorInputs.size();
 
         for (auto* descriptorSet : entryPoints[i].m_descriptorSets)
