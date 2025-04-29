@@ -447,12 +447,25 @@ int main(int _argc, const char** _argv)
         }
     }
 
-    Modules::ShaderReflection::Blob* blob = Modules::ShaderReflection::Blob::CreateBlob(AllocatorInstance(), entryPointsInputs);
     size_t reflectionBlobSize;
     Modules::ShaderReflection::Blob* blob = Modules::ShaderReflection::Blob::CreateBlob(
         AllocatorInstance(),
         entryPointsInputs,
         reflectionBlobSize);
+
+    if (!argInfo.m_outputPath.empty())
+    {
+        std::filesystem::path reflectionPath = argInfo.m_outputPath.replace_extension(".keshrf");
+
+        std::ofstream reflectionFile(reflectionPath, std::ios::binary);
+        if (!reflectionFile.is_open())
+        {
+            ErrorCallback("Failed to open reflection file", nullptr);
+            return 1;
+        }
+        reflectionFile.write(reinterpret_cast<const char*>(blob), static_cast<std::streamsize>(reflectionBlobSize));
+        reflectionFile.close();
+    }
 
     spDestroyCompileRequest(request);
 
