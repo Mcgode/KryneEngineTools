@@ -448,6 +448,11 @@ int main(int _argc, const char** _argv)
     }
 
     Modules::ShaderReflection::Blob* blob = Modules::ShaderReflection::Blob::CreateBlob(AllocatorInstance(), entryPointsInputs);
+    size_t reflectionBlobSize;
+    Modules::ShaderReflection::Blob* blob = Modules::ShaderReflection::Blob::CreateBlob(
+        AllocatorInstance(),
+        entryPointsInputs,
+        reflectionBlobSize);
 
     spDestroyCompileRequest(request);
 
