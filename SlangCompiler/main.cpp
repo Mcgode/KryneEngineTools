@@ -6,6 +6,8 @@
 
 #include <cstring>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 #include <KryneEngine/Core/Common/Types.hpp>
 #include <KryneEngine/Core/Graphics/Common/ShaderPipeline.hpp>
 #include <KryneEngine/Modules/ShaderReflection/Blob.hpp>
@@ -28,6 +30,7 @@ enum class TargetApi
 struct ArgumentsInformation
 {
     TargetApi m_targetApi = TargetApi::Vulkan;
+    std::filesystem::path m_outputPath {};
 };
 
 ArgumentsInformation ParseCommandLineArguments(int _argc, const char** _argv, eastl::vector<const char*>& _args)
@@ -57,6 +60,12 @@ ArgumentsInformation ParseCommandLineArguments(int _argc, const char** _argv, ea
             {
                 ErrorCallback("Unsupported target", nullptr);
             }
+        }
+        else if (strcmp(_argv[i], "-o") == 0)
+        {
+            _args.push_back(_argv[i]);
+            i++;
+            argumentsInformation.m_outputPath = _argv[i];
         }
         _args.push_back(_argv[i]);
     }
