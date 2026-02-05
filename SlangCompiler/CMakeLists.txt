@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(SlangCompiler)
 
 add_executable(SlangCompiler
-        main.cpp
+        SlangCompiler.cpp
 )
 
 target_include_directories(SlangCompiler PRIVATE external/slang/include)
