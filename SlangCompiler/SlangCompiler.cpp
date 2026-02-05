@@ -73,17 +73,33 @@ ArgumentsInformation ParseCommandLineArguments(int _argc, const char** _argv, ea
     return argumentsInformation;
 }
 
-eastl::pair<DescriptorBindingDesc::Type, TextureTypes> ParseDescriptorBindingType(slang::VariableLayoutReflection* _reflection)
+struct DescriptorBindingType
+{
+    DescriptorBindingDesc::Type m_bindingType;
+    TextureTypes m_textureType;
+    eastl::optional<u32> m_arraySize;
+};
+DescriptorBindingType ParseDescriptorBindingType(slang::VariableLayoutReflection* _reflection)
 {
     slang::TypeLayoutReflection* typeLayout = _reflection->getTypeLayout();
 
-    if (typeLayout->getKind() == slang::TypeReflection::Kind::ConstantBuffer)
+    eastl::optional<u32> arraySize {};
+
+    slang::TypeReflection::Kind kind = typeLayout->getKind();
+    if (kind == slang::TypeReflection::Kind::Array)
     {
-        return { DescriptorBindingDesc::Type::ConstantBuffer, TextureTypes::Single2D };
+        arraySize = typeLayout->getElementCount();
+        typeLayout = typeLayout->getElementTypeLayout();
+        kind = typeLayout->getKind();
     }
-    else if (typeLayout->getKind() == slang::TypeReflection::Kind::SamplerState)
+
+    if (kind == slang::TypeReflection::Kind::ConstantBuffer)
     {
-        return { DescriptorBindingDesc::Type::Sampler, TextureTypes::Single2D };
+        return { DescriptorBindingDesc::Type::ConstantBuffer, TextureTypes::Single2D, arraySize };
+    }
+    else if (kind == slang::TypeReflection::Kind::SamplerState)
+    {
+        return { DescriptorBindingDesc::Type::Sampler, TextureTypes::Single2D, arraySize };
     }
 
     const u32 resourceShape = typeLayout->getResourceShape();
@@ -160,7 +176,7 @@ eastl::pair<DescriptorBindingDesc::Type, TextureTypes> ParseDescriptorBindingTyp
         }
     }
 
-    return { bindingType, textureType };
+    return { bindingType, textureType, arraySize };
 }
 
 int main(int _argc, const char** _argv)
@@ -332,11 +348,12 @@ int main(int _argc, const char** _argv)
             {
                 slang::VariableLayoutReflection* field = elementType->getFieldByIndex(k);
                 Modules::ShaderReflection::DescriptorInput& descriptorInput = descriptorInputs.push_back();
-                const auto [bindingType, textureType] = ParseDescriptorBindingType(field);
+                const auto [bindingType, textureType, arraySize] = ParseDescriptorBindingType(field);
                 descriptorInput.m_name = field->getName();
                 descriptorInput.m_bindingIndex = field->getBindingIndex();
                 descriptorInput.m_type = bindingType;
                 descriptorInput.m_textureType = textureType;
+                descriptorInput.m_count = arraySize.value_or(1);
             }
 
             const size_t descriptorEnd = descriptorInputs.size();
@@ -378,7 +395,7 @@ int main(int _argc, const char** _argv)
                     {
                         slang::VariableLayoutReflection* field = elementType->getFieldByIndex(i);
 
-                        const auto [bindingType, textureType] = ParseDescriptorBindingType(field);
+                        const auto [bindingType, textureType, arraySize] = ParseDescriptorBindingType(field);
                         const char* bindingTypeString = "";
                         const char* textureTypeString = "";
 
@@ -435,7 +452,13 @@ int main(int _argc, const char** _argv)
                             }
                         }
 
-                        printf("\t\t- `%s`: %s%s, binding %u\n", field->getName(), bindingTypeString, textureTypeString, field->getBindingIndex());
+                        eastl::string arrayStr {};
+                        if (arraySize.has_value())
+                        {
+                            arrayStr.sprintf(" [%zu]", arraySize.value());
+                        }
+
+                        printf("\t\t- `%s`: %s%s%s, binding %u\n", field->getName(), bindingTypeString, textureTypeString, arrayStr.c_str(), field->getBindingIndex());
                     }
                 }
             }
