@@ -236,6 +236,9 @@ int main(int _argc, const char** _argv)
     };
     eastl::vector<EntryPointReflection> entryPoints;
     entryPoints.reserve(reflection->getEntryPointCount());
+    slang::IBlob* jsonBlob = nullptr;
+    reflection->toJson(&jsonBlob);
+    printf("%s", (const char*)jsonBlob->getBufferPointer());
 
     eastl::vector<Modules::ShaderReflection::DescriptorInput> descriptorInputs;
     eastl::vector<Modules::ShaderReflection::DescriptorSetInput> descriptorSetsInputs;
