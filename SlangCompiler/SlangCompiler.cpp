@@ -7,7 +7,6 @@
 #include "KryneEngine/Core/Graphics/ShaderPipeline.hpp"
 #include <KryneEngine/Core/Common/Types.hpp>
 #include <KryneEngine/Modules/ShaderReflection/Blob.hpp>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -231,7 +230,7 @@ int main(int _argc, const char** _argv)
     struct EntryPointReflection
     {
         const char* m_name = nullptr;
-        eastl::vector<slang::VariableLayoutReflection*> m_descriptorSets;
+        eastl::vector<slang::VariableLayoutReflection*> m_localDescriptorSets;
         eastl::vector<slang::VariableLayoutReflection*> m_pushConstants;
     };
     eastl::vector<EntryPointReflection> entryPoints;
@@ -289,16 +288,13 @@ int main(int _argc, const char** _argv)
             return 1;
         }
 
-        entryPointReflection.m_descriptorSets = globalParameterBlocks;
-        entryPointReflection.m_pushConstants = globalPushConstants;
-
         for (u32 j = 0; j < entryPoint->getParameterCount(); j++)
         {
             slang::VariableLayoutReflection* parameter = entryPoint->getParameterByIndex(j);
             slang::TypeLayoutReflection* type = parameter->getTypeLayout();
             if (type->getKind() == slang::TypeReflection::Kind::ParameterBlock)
             {
-                entryPointReflection.m_descriptorSets.push_back(parameter);
+                entryPointReflection.m_localDescriptorSets.push_back(parameter);
             }
             else if (parameter->getCategory() == slang::Uniform || parameter->getCategory() == slang::PushConstantBuffer)
             {
@@ -318,7 +314,7 @@ int main(int _argc, const char** _argv)
             entryPointInput.m_pushConstants->m_size = entryPointReflection.m_pushConstants[0]->getTypeLayout()->getSize(entryPointReflection.m_pushConstants[0]->getCategory());
         }
 
-        for (auto* descriptorSet : entryPoints[i].m_descriptorSets)
+        for (auto* descriptorSet : entryPoints[i].m_localDescriptorSets)
         {
             totalSets++;
             slang::TypeLayoutReflection* elementType = descriptorSet->getTypeLayout()->getElementTypeLayout();
@@ -331,7 +327,7 @@ int main(int _argc, const char** _argv)
 
     for (auto i = 0u; i < entryPoints.size(); i++)
     {
-        if (entryPoints[i].m_descriptorSets.empty())
+        if (entryPoints[i].m_localDescriptorSets.empty())
         {
             entryPointsInputs[i].m_descriptorSets = {};
             continue;
@@ -339,7 +335,7 @@ int main(int _argc, const char** _argv)
 
         const size_t descriptorSetBegin = descriptorInputs.size();
 
-        for (auto* descriptorSet : entryPoints[i].m_descriptorSets)
+        for (auto* descriptorSet : entryPoints[i].m_localDescriptorSets)
         {
             Modules::ShaderReflection::DescriptorSetInput& descriptorSetInput = descriptorSetsInputs.push_back();
             descriptorSetInput.m_name = descriptorSet->getName();
@@ -353,7 +349,7 @@ int main(int _argc, const char** _argv)
                 Modules::ShaderReflection::DescriptorInput& descriptorInput = descriptorInputs.push_back();
                 const auto [bindingType, textureType, arraySize] = ParseDescriptorBindingType(field);
                 descriptorInput.m_name = field->getName();
-                descriptorInput.m_bindingIndex = field->getBindingIndex();
+                descriptorInput.m_bindingIndex = field->getBindingIndex() + globalParameterBlocks.size();
                 descriptorInput.m_type = bindingType;
                 descriptorInput.m_textureType = textureType;
                 descriptorInput.m_count = arraySize.value_or(1);
@@ -379,18 +375,24 @@ int main(int _argc, const char** _argv)
     for (const auto& entryPoint : entryPoints)
     {
         printf("- %s:\n", entryPoint.m_name);
-        if (entryPoint.m_descriptorSets.empty())
+        if (entryPoint.m_localDescriptorSets.empty())
         {
             printf("\tNo descriptor sets\n");
         }
         else
         {
             printf("\tDescriptor sets:\n");
-            for (const auto& descriptorSet : entryPoint.m_descriptorSets)
+            for (u32 i = 0; i < globalParameterBlocks.size() + entryPoint.m_localDescriptorSets.size(); i++)
             {
-                printf("\t - `%s`: set %d\n", descriptorSet->getName(), descriptorSet->getBindingIndex());
+                slang::VariableLayoutReflection* descriptorSet = i < globalParameterBlocks.size()
+                    ? globalParameterBlocks[i]
+                    : entryPoint.m_localDescriptorSets[i - globalParameterBlocks.size()];
 
                 slang::TypeLayoutReflection* elementType = descriptorSet->getTypeLayout()->getElementTypeLayout();
+
+                printf("\t - `%s`: set %lu\n",
+                    descriptorSet->getName(),
+                    descriptorSet->getBindingIndex() + (i < globalParameterBlocks.size() ? 0 : globalParameterBlocks.size()));
 
                 if (elementType->getKind() == slang::TypeReflection::Kind::Struct)
                 {
