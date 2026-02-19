@@ -25,3 +25,4 @@ message(STATUS "Configuration: ${ARCH}")
 
 target_link_libraries(SlangCompiler PUBLIC KryneEngine_Core KryneEngine_Modules_ShaderReflection)
 target_link_libraries(SlangCompiler PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/slang/lib/${PLATFORM}/${ARCH}/libslang.dylib)
+set_target_properties(SlangCompiler PROPERTIES FOLDER "EngineTools")
