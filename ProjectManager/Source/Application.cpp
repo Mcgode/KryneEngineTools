@@ -12,6 +12,7 @@
 #include <KryneEngine/Core/Window/Window.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
 
+#include "EASTL/sort.h"
 #include "Logger/CoreCategory.hpp"
 #include "ProjectManager/Logger/LogFilter.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
@@ -130,9 +131,11 @@ namespace ProjectManager
 
             if (ImGui::Begin("Log", nullptr, ImGuiWindowFlags_MenuBar))
             {
+                auto categories = Logger::GetInstance()->GetRegisteredCategories(m_allocator);
+
                 if (ImGui::BeginMenuBar())
                 {
-                    if (ImGui::BeginMenu("Filter"))
+                    if (ImGui::BeginMenu("Severity"))
                     {
                         for (auto i = 0; i < static_cast<unsigned>(LogSeverity::COUNT); i++)
                         {
@@ -144,6 +147,39 @@ namespace ProjectManager
                                     logFilter.ExcludeSeverity(severity);
                                 else
                                     logFilter.IncludeSeverity(severity);
+                            }
+                        }
+
+                        ImGui::EndMenu();
+                    }
+
+                    if (ImGui::BeginMenu("Categories"))
+                    {
+                        eastl::vector categoriesList = categories;
+                        eastl::sort(categoriesList.begin(), categoriesList.end(), [](const auto& _a, const auto& _b) {
+                            return _a.second < _b.second;
+                        });
+
+                        if (ImGui::Button("Select all"))
+                        {
+                            for (const auto& category : categoriesList)
+                                logFilter.m_categoryWhiteList.emplace(category.first);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Deselect all"))
+                        {
+                            logFilter.m_categoryWhiteList.clear();
+                        }
+
+                        for (auto& category : categoriesList)
+                        {
+                            const bool enabled = logFilter.m_categoryWhiteList.find(category.first) != logFilter.m_categoryWhiteList.end();
+                            if (ImGui::MenuItem(category.second.data(), nullptr, enabled))
+                            {
+                                if (enabled)
+                                    logFilter.m_categoryWhiteList.erase(category.first);
+                                else
+                                    logFilter.m_categoryWhiteList.emplace(category.first);
                             }
                         }
 
@@ -165,7 +201,7 @@ namespace ProjectManager
                     ImGui::TableHeadersRow();
 
                     ImGuiListClipper clipper;
-                    clipper.Begin(messages.size());
+                    clipper.Begin(static_cast<int>(messages.size()));
                     while (clipper.Step())
                     {
                         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
@@ -184,7 +220,7 @@ namespace ProjectManager
                             ImGui::Text("%s", LogSeverityToString(message.m_severity));
 
                             ImGui::TableSetColumnIndex(2);
-                            ImGui::Text("%s", Logger::GetInstance()->GetCategoryName(message.m_category).data());
+                            ImGui::Text("%s", categories.find(message.m_category)->second.data());
 
                             ImGui::TableSetColumnIndex(3);
                             ImGui::Text("%s", message.m_shortMessage.data());

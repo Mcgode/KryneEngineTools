@@ -42,7 +42,8 @@ namespace ProjectManager
 
         bool RegisterCategory(KryneEngine::u64 _id, const eastl::string_view& _category);
 
-        eastl::string_view GetCategoryName(KryneEngine::u64 _id) const;
+        eastl::vector_map<KryneEngine::u64, eastl::string_view> GetRegisteredCategories(
+            KryneEngine::AllocatorInstance _allocator) const;
 
         void Log(
             LogSeverity _severity,

@@ -38,19 +38,17 @@ namespace ProjectManager
         return true;
     }
 
-    eastl::string_view Logger::GetCategoryName(const KryneEngine::u64 _id) const
+    eastl::vector_map<KryneEngine::u64, eastl::string_view> Logger::GetRegisteredCategories(
+        const KryneEngine::AllocatorInstance _allocator) const
     {
         const auto lock = m_mutex.AutoLock();
 
-        if (_id == 0)
+        eastl::vector_map<KryneEngine::u64, eastl::string_view> categories(_allocator);
+        for (const auto& pair: m_categories)
         {
-            return "Default";
+            categories.emplace(pair.first, pair.second);
         }
-
-        const auto it = m_categories.find(_id);
-        if (it == m_categories.end())
-            return { nullptr, 0 };
-        return it->second;
+        return categories;
     }
 
     void Logger::Log(
@@ -76,7 +74,7 @@ namespace ProjectManager
     {
         const auto lock = m_mutex.AutoLock();
 
-        eastl::vector<MessageView> bundle;
+        eastl::vector<MessageView> bundle(_allocator);
         for (const auto& message : m_messages)
         {
             if (_filter.FilterMessage(message.m_severity, message.m_category))
