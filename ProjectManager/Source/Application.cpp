@@ -84,6 +84,9 @@ namespace ProjectManager
             Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, buffer);
         }
 
+        LogFilter logFilter(m_allocator);
+        logFilter.m_categoryWhiteList.emplace(kCoreLogCategory);
+
         do
         {
             m_imguiContext->NewFrame(m_window.get());
@@ -125,14 +128,34 @@ namespace ProjectManager
                 ImGui::End();
             }
 
-            if (ImGui::Begin("Log"))
+            if (ImGui::Begin("Log", nullptr, ImGuiWindowFlags_MenuBar))
             {
-                LogFilter logFilter(m_allocator);
-                logFilter.m_categoryWhiteList.emplace(kCoreLogCategory);
+                if (ImGui::BeginMenuBar())
+                {
+                    if (ImGui::BeginMenu("Filter"))
+                    {
+                        for (auto i = 0; i < static_cast<unsigned>(LogSeverity::COUNT); i++)
+                        {
+                            const auto severity = static_cast<LogSeverity>(i);
+                            const bool isChecked = logFilter.IsSeverityIncluded(severity);
+                            if (ImGui::MenuItem(LogSeverityToString(severity), nullptr, isChecked))
+                            {
+                                if (isChecked)
+                                    logFilter.ExcludeSeverity(severity);
+                                else
+                                    logFilter.IncludeSeverity(severity);
+                            }
+                        }
+
+                        ImGui::EndMenu();
+                    }
+
+                    ImGui::EndMenuBar();
+                }
 
                 eastl::vector<Logger::MessageView> messages = m_logger->GetMessageViews(logFilter, m_allocator);
 
-                if (ImGui::BeginTable("logTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+                if (ImGui::BeginTable("logTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY))
                 {
                     ImGui::TableSetupScrollFreeze(0, 1);
                     ImGui::TableSetupColumn("Date", ImGuiTableColumnFlags_WidthFixed, 100);
@@ -155,7 +178,7 @@ namespace ProjectManager
                             const std::tm* localTime = std::localtime(&absoluteTime);
                             char buffer[100];
                             std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localTime);
-                            ImGui::Text("%s", buffer);
+                            ImGui::Text("%s.%lld", buffer, std::chrono::duration_cast<std::chrono::milliseconds>(message.m_time.time_since_epoch()).count() % 1000);
 
                             ImGui::TableSetColumnIndex(1);
                             ImGui::Text("%s", LogSeverityToString(message.m_severity));

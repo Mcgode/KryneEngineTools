@@ -33,6 +33,11 @@ namespace ProjectManager
             m_severityWhiteList &= ~(1 << static_cast<KryneEngine::u8>(_severity));
         }
 
+        [[nodiscard]] bool IsSeverityIncluded(const LogSeverity _severity) const
+        {
+            return (1 << static_cast<unsigned char>(_severity) & m_severityWhiteList) != 0;
+        }
+
         [[nodiscard]] bool FilterMessage(const LogSeverity _severity, const KryneEngine::u64 _category) const
         {
             if ((1ull << static_cast<unsigned char>(_severity) & m_severityWhiteList) == 0)
