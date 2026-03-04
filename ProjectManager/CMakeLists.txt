@@ -19,7 +19,10 @@ add_library(ProjectManagerLib STATIC
         Include/ProjectManager/Logger/Logger.hpp
         Include/ProjectManager/Logger/LogFilter.hpp
         Include/ProjectManager/Logger/LogSeverity.hpp
-        Source/Logger/CoreCategory.hpp)
+        Source/Logger/CoreCategory.hpp
+        Source/Logger/LogWindow.cpp
+        Source/Logger/LogWindow.hpp
+        Include/ProjectManager/IUiWindow.hpp)
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)

@@ -24,6 +24,8 @@ namespace KryneEngine
 
 namespace ProjectManager
 {
+    class LogWindow;
+    class IUiWindow;
     class Logger;
 
     class Application
@@ -33,6 +35,8 @@ namespace ProjectManager
         ~Application();
 
         void SetName(const eastl::string_view _name) { m_applicationInfo.m_applicationName = _name; }
+
+        void RegisterUiWindow(IUiWindow* _window);
 
         /**
          * @brief Runs the application. Call this once you are done with the setup.
@@ -46,5 +50,8 @@ namespace ProjectManager
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;
         eastl::unique_ptr<KryneEngine::Window> m_window {};
         eastl::unique_ptr<KryneEngine::Modules::ImGui::Context> m_imguiContext {};
+
+        eastl::vector<IUiWindow*> m_uiWindows;
+        eastl::unique_ptr<LogWindow> m_logWindow;
     };
 }
