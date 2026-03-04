@@ -14,7 +14,12 @@ target_include_directories(yyjson PUBLIC Extern/yyjson-0.12.0)
 
 add_library(ProjectManagerLib STATIC
     Source/Application.cpp
-        Include/ProjectManager/Application.hpp)
+        Include/ProjectManager/Application.hpp
+        Source/Logger/Logger.cpp
+        Include/ProjectManager/Logger/Logger.hpp
+        Include/ProjectManager/Logger/LogFilter.hpp
+        Include/ProjectManager/Logger/LogSeverity.hpp
+        Source/Logger/CoreCategory.hpp)
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)
