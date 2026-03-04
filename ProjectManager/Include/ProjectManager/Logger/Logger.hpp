@@ -42,6 +42,8 @@ namespace ProjectManager
 
         bool RegisterCategory(KryneEngine::u64 _id, const eastl::string_view& _category);
 
+        eastl::string_view GetCategoryName(KryneEngine::u64 _id) const;
+
         void Log(
             LogSeverity _severity,
             KryneEngine::u64 _category,

@@ -18,4 +18,25 @@ namespace ProjectManager
         Fatal,
         COUNT
     };
+
+    constexpr const char* LogSeverityToString(const LogSeverity _severity)
+    {
+        switch (_severity)
+        {
+        case LogSeverity::Debug:
+            return "Debug";
+        case LogSeverity::Verbose:
+            return "Verbose";
+        case LogSeverity::Info:
+            return "Info";
+        case LogSeverity::Warning:
+            return "Warning";
+        case LogSeverity::Error:
+            return "Error";
+        case LogSeverity::Fatal:
+            return "Fatal";
+        default:
+            return "";
+        }
+    }
 }

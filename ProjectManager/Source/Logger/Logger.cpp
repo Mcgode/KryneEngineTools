@@ -38,6 +38,21 @@ namespace ProjectManager
         return true;
     }
 
+    eastl::string_view Logger::GetCategoryName(const KryneEngine::u64 _id) const
+    {
+        const auto lock = m_mutex.AutoLock();
+
+        if (_id == 0)
+        {
+            return "Default";
+        }
+
+        const auto it = m_categories.find(_id);
+        if (it == m_categories.end())
+            return { nullptr, 0 };
+        return it->second;
+    }
+
     void Logger::Log(
         const LogSeverity _severity,
         const KryneEngine::u64 _category,

@@ -27,7 +27,7 @@ namespace ProjectManager
 
         Logger::GetInstance()->RegisterCategory(kCoreLogCategory, "ProjectManagerCore");
 
-        Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, "Application setup started");
+        Logger::GetInstance()->Log(LogSeverity::Verbose, kCoreLogCategory, "Application setup started");
     }
 
     Application::~Application()
@@ -75,7 +75,7 @@ namespace ProjectManager
         ImFont* bigFont = ImGui::GetIO().Fonts->AddFontDefaultVector();
         bigFont->Scale = 3.0f;
 
-        Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, "Setup finalized");
+        Logger::GetInstance()->Log(LogSeverity::Verbose, kCoreLogCategory, "Setup finalized");
 
         for (auto i = 0; i < 100; i++)
         {
@@ -158,9 +158,11 @@ namespace ProjectManager
                             ImGui::Text("%s", buffer);
 
                             ImGui::TableSetColumnIndex(1);
-                            ImGui::Text("%d", message.m_severity);
+                            ImGui::Text("%s", LogSeverityToString(message.m_severity));
+
                             ImGui::TableSetColumnIndex(2);
-                            ImGui::Text("%lld", message.m_category);
+                            ImGui::Text("%s", Logger::GetInstance()->GetCategoryName(message.m_category).data());
+
                             ImGui::TableSetColumnIndex(3);
                             ImGui::Text("%s", message.m_shortMessage.data());
                         }
