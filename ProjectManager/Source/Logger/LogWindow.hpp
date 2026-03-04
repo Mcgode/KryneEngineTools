@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <imgui_internal.h>
 #include <KryneEngine/Core/Memory/Allocators/Allocator.hpp>
 
 #include "ProjectManager/IUiWindow.hpp"
@@ -19,10 +20,13 @@ namespace ProjectManager
         explicit LogWindow(KryneEngine::AllocatorInstance _allocator);
         ~LogWindow() override = default;
 
+        void OnImGuiContextStarted() override;
+
         void Render() override;
 
     private:
         KryneEngine::AllocatorInstance m_allocator;
         LogFilter m_logFilter;
+        ImGuiSettingsHandler m_settingsHandler;
     };
 }

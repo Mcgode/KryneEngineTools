@@ -6,7 +6,6 @@
 
 #include "LogWindow.hpp"
 
-#include <imgui.h>
 #include <EASTL/sort.h>
 
 #include "CoreCategory.hpp"
@@ -19,6 +18,83 @@ namespace ProjectManager
         , m_logFilter(_allocator)
     {
         m_logFilter.m_categoryWhiteList.emplace(kCoreLogCategory);
+    }
+
+    void LogWindow::OnImGuiContextStarted()
+    {
+        IUiWindow::OnImGuiContextStarted();
+
+        m_settingsHandler.TypeName = "LogWindow";
+        m_settingsHandler.TypeHash = ImHashStr("LogWindow");
+        m_settingsHandler.ClearAllFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler)
+        {
+            auto* window = static_cast<LogWindow*>(_handler->UserData);
+
+            window->m_logFilter = LogFilter(window->m_allocator);
+            for (const auto& category : Logger::GetInstance()->GetRegisteredCategories(window->m_allocator))
+            {
+                window->m_logFilter.m_categoryWhiteList.emplace(category.first);
+            }
+        };
+        m_settingsHandler.ReadInitFn = nullptr;
+        m_settingsHandler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler, const char*)
+        {
+            auto* window = static_cast<LogWindow*>(_handler->UserData);
+            window->m_logFilter = LogFilter(window->m_allocator);
+            return _handler->UserData;
+        };
+        m_settingsHandler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler, void*, const char* _line)
+        {
+            auto* window = static_cast<LogWindow*>(_handler->UserData);
+
+            KryneEngine::u64 input64;
+            if (sscanf(_line, "LogFilter.SeverityWhitelist=0x%llX", &input64)) { window->m_logFilter.m_severityWhiteList = input64; }
+            else if (sscanf(_line, "LogFilter.CategoryWhitelist=None")) {}
+            else if (sscanf(_line, "LogFilter.CategoryWhitelist=0x%llX,", &input64))
+            {
+                window->m_logFilter.m_categoryWhiteList.emplace(input64);
+                const char* ptr = _line;
+                while (*ptr != '\0')
+                {
+                    if (*ptr == ',')
+                    {
+                        ptr++;
+                        if (sscanf(ptr, "0x%llX,", &input64))
+                        {
+                            window->m_logFilter.m_categoryWhiteList.emplace(input64);
+                            ptr += 3;
+                        }
+                    }
+                    else ptr++;
+                }
+            }
+        };
+        m_settingsHandler.ApplyAllFn = nullptr;
+        m_settingsHandler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler, ImGuiTextBuffer* _buf)
+        {
+            auto* window = static_cast<LogWindow*>(_handler->UserData);
+
+            _buf->reserve(
+                sizeof("[LogWindow][Settings]\n")
+                + sizeof("LogFilter.SeverityWhitelist=0x") + 10u
+                + sizeof("LogFilter.CategoryWhitelist=None") + 12u * window->m_logFilter.m_categoryWhiteList.size());
+
+            _buf->append("[LogWindow][Settings]\n");
+            _buf->appendf("LogFilter.SeverityWhitelist=0x%llX\n", window->m_logFilter.m_severityWhiteList);
+            _buf->appendf("LogFilter.CategoryWhitelist=");
+            if (window->m_logFilter.m_categoryWhiteList.empty())
+                _buf->append("None");
+            else
+            {
+                for (const auto& category : window->m_logFilter.m_categoryWhiteList)
+                {
+                    _buf->appendf("0x%llX,", category);
+                }
+            }
+            _buf->append("\n");
+        };
+        m_settingsHandler.UserData = this;
+        ImGui::AddSettingsHandler(&m_settingsHandler);
     }
 
     void LogWindow::Render()
