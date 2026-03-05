@@ -35,6 +35,9 @@ namespace ProjectManager
             {
                 window->m_logFilter.m_categoryWhiteList.emplace(category.first);
             }
+
+            window->m_showDate = true;
+            window->m_showMilliseconds = true;
         };
         m_settingsHandler.ReadInitFn = nullptr;
         m_settingsHandler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler, const char*)
@@ -49,12 +52,12 @@ namespace ProjectManager
 
             KryneEngine::u64 input64;
             if (sscanf(_line, "LogFilter.SeverityWhitelist=0x%llX", &input64)) { window->m_logFilter.m_severityWhiteList = input64; }
-            else if (sscanf(_line, "LogFilter.CategoryWhitelist=None")) {}
+            else if (strcmp(_line, "LogFilter.CategoryWhitelist=None") == 0) {}
             else if (sscanf(_line, "LogFilter.CategoryWhitelist=0x%llX,", &input64))
             {
                 window->m_logFilter.m_categoryWhiteList.emplace(input64);
                 const char* ptr = _line;
-                while (*ptr != '\0')
+                while (*ptr != '\0' && *ptr != '\n')
                 {
                     if (*ptr == ',')
                     {
@@ -68,16 +71,26 @@ namespace ProjectManager
                     else ptr++;
                 }
             }
+            else if (strcmp(_line, "TimePoint.ShowDate=True") == 0)
+                window->m_showDate = true;
+            else if (strcmp(_line, "TimePoint.ShowDate=False") == 0)
+                window->m_showDate = false;
+            else if (strcmp(_line, "TimePoint.ShowMilliseconds=True") == 0)
+                window->m_showMilliseconds = true;
+            else if (strcmp(_line, "TimePoint.ShowMilliseconds=False") == 0)
+                window->m_showMilliseconds = false;
         };
         m_settingsHandler.ApplyAllFn = nullptr;
         m_settingsHandler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* _handler, ImGuiTextBuffer* _buf)
         {
             auto* window = static_cast<LogWindow*>(_handler->UserData);
 
-            _buf->reserve(
-                sizeof("[LogWindow][Settings]\n")
+            const size_t reserveSize = sizeof("[LogWindow][Settings]\n")
                 + sizeof("LogFilter.SeverityWhitelist=0x") + 10u
-                + sizeof("LogFilter.CategoryWhitelist=None") + 12u * window->m_logFilter.m_categoryWhiteList.size());
+                + sizeof("LogFilter.CategoryWhitelist=None") + 12u * window->m_logFilter.m_categoryWhiteList.size()
+                + sizeof("TimePoint.ShowDate=False\n")
+                + sizeof("TimePoint.ShowMilliseconds=False\n");
+            _buf->reserve(static_cast<int>(reserveSize));
 
             _buf->append("[LogWindow][Settings]\n");
             _buf->appendf("LogFilter.SeverityWhitelist=0x%llX\n", window->m_logFilter.m_severityWhiteList);
@@ -92,6 +105,8 @@ namespace ProjectManager
                 }
             }
             _buf->append("\n");
+            _buf->appendf("TimePoint.ShowDate=%s\n", window->m_showDate ? "True" : "False");
+            _buf->appendf("TimePoint.ShowMilliseconds=%s\n", window->m_showMilliseconds ? "True" : "False");
         };
         m_settingsHandler.UserData = this;
         ImGui::AddSettingsHandler(&m_settingsHandler);
@@ -156,6 +171,15 @@ namespace ProjectManager
                         ImGui::EndMenu();
                     }
 
+                    if (ImGui::BeginMenu("Options"))
+                    {
+                        if (ImGui::MenuItem("Show date", nullptr, m_showDate))
+                            m_showDate = !m_showDate;
+                        if (ImGui::MenuItem("Show milliseconds", nullptr, m_showMilliseconds))
+                            m_showMilliseconds = !m_showMilliseconds;
+                        ImGui::EndMenu();
+                    }
+
                     ImGui::EndMenuBar();
                 }
 
@@ -183,8 +207,14 @@ namespace ProjectManager
                             const std::time_t absoluteTime = std::chrono::system_clock::to_time_t(message.m_time);
                             const std::tm* localTime = std::localtime(&absoluteTime);
                             char buffer[100];
-                            std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localTime);
-                            ImGui::Text("%s.%lld", buffer, std::chrono::duration_cast<std::chrono::milliseconds>(message.m_time.time_since_epoch()).count() % 1000);
+                            if (m_showDate)
+                                std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localTime);
+                            else
+                                std::strftime(buffer, sizeof(buffer), "%H:%M:%S", localTime);
+                            if (m_showMilliseconds)
+                                ImGui::Text("%s.%03lld", buffer, std::chrono::duration_cast<std::chrono::milliseconds>(message.m_time.time_since_epoch()).count() % 1000);
+                            else
+                                ImGui::Text("%s", buffer);
 
                             ImGui::TableSetColumnIndex(1);
                             ImGui::Text("%s", LogSeverityToString(message.m_severity));

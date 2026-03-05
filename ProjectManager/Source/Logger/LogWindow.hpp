@@ -27,6 +27,8 @@ namespace ProjectManager
     private:
         KryneEngine::AllocatorInstance m_allocator;
         LogFilter m_logFilter;
+        bool m_showDate = true;
+        bool m_showMilliseconds = true;
         ImGuiSettingsHandler m_settingsHandler;
     };
 }
