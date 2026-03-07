@@ -28,6 +28,17 @@ namespace ProjectManager
         m_logger = eastl::make_unique<Logger>(_allocator);
         m_applicationInfo.m_applicationName.set_allocator(_allocator);
 
+        m_applicationInfo.m_applicationVersion = { 0, 1, 0 };
+        m_applicationInfo.m_engineVersion = { 0, 1, 0 };
+
+#if defined(KE_GRAPHICS_API_VK)
+        m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Vulkan_1_0;
+#elif defined(KE_GRAPHICS_API_DX12)
+        m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::DirectX12_0;
+#elif defined(KE_GRAPHICS_API_MTL)
+        m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Metal_3;
+#endif
+
         m_logWindow = eastl::make_unique<LogWindow>(_allocator);
         m_uiWindows.push_back(m_logWindow.get());
 
