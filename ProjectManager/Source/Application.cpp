@@ -178,8 +178,8 @@ namespace ProjectManager
                 ImGui::Text("Welcome to Liberators project Manager!");
                 ImGui::PopFont();
                 ImGui::Spacing();
-                ImGui::End();
             }
+            ImGui::End();
 
             for (auto* uiWindow : m_uiWindows)
                 uiWindow->Render();
