@@ -22,6 +22,7 @@ namespace ProjectManager
 {
     Application::Application(const KryneEngine::AllocatorInstance _allocator)
         : m_allocator(_allocator)
+        , m_rtvs(_allocator)
         , m_renderPasses(_allocator)
         , m_uiWindows(_allocator)
     {
@@ -30,6 +31,8 @@ namespace ProjectManager
 
         m_applicationInfo.m_applicationVersion = { 0, 1, 0 };
         m_applicationInfo.m_engineVersion = { 0, 1, 0 };
+
+        m_applicationInfo.m_displayOptions.m_resizableWindow = true;
 
 #if defined(KE_GRAPHICS_API_VK)
         m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Vulkan_1_0;
@@ -72,9 +75,11 @@ namespace ProjectManager
         m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo, m_allocator);
         KryneEngine::GraphicsContext* graphicsContext = m_window->GetGraphicsContext();
 
+        m_rtvs.Resize(graphicsContext->GetFrameContextCount());
         m_renderPasses.Resize(graphicsContext->GetFrameContextCount());
         for (auto i = 0u; i < graphicsContext->GetFrameContextCount(); i++)
         {
+            m_rtvs[i] = graphicsContext->GetPresentRenderTargetView(i);
             m_renderPasses[i] = graphicsContext->CreateRenderPass({
                 .m_colorAttachments = {
                     KryneEngine::RenderPassDesc::Attachment {
@@ -111,12 +116,38 @@ namespace ProjectManager
 
         do
         {
+            if (m_window->ShouldResizeSwapChain())
+            {
+                if (m_window->GetGraphicsContext()->ResizeSwapChain(m_window.get()))
+                {
+                    m_window->NotifySwapChainResized();
+                }
+            }
+
+            const KryneEngine::u8 swapChainIdx = m_window->GetGraphicsContext()->GetCurrentPresentImageIndex();
+            if (m_rtvs[swapChainIdx] != graphicsContext->GetPresentRenderTargetView(swapChainIdx))
+            {
+                m_rtvs[swapChainIdx] = graphicsContext->GetPresentRenderTargetView(swapChainIdx);
+                // TODO: handle delayed destruction
+                // graphicsContext->DestroyRenderPass(m_renderPasses[swapChainIdx]);
+                m_renderPasses[swapChainIdx] = graphicsContext->CreateRenderPass({
+                    .m_colorAttachments = {
+                        KryneEngine::RenderPassDesc::Attachment {
+                            .m_loadOperation = KryneEngine::RenderPassDesc::Attachment::LoadOperation::Clear,
+                            .m_storeOperation = KryneEngine::RenderPassDesc::Attachment::StoreOperation::Store,
+                            .m_finalLayout = KryneEngine::TextureLayout::Present,
+                            .m_rtv = m_rtvs[swapChainIdx],
+                        }
+                    },
+                });
+            }
+
             m_imguiContext->NewFrame(m_window.get());
 
             KryneEngine::CommandListHandle transfer = graphicsContext->BeginGraphicsCommandList();
             KryneEngine::CommandListHandle graphics = graphicsContext->BeginGraphicsCommandList();
 
-            const KryneEngine::RenderPassHandle renderPass = m_renderPasses[graphicsContext->GetCurrentPresentImageIndex()];
+            const KryneEngine::RenderPassHandle renderPass = m_renderPasses[swapChainIdx];
 
             graphicsContext->BeginRenderPass(graphics, renderPass);
 

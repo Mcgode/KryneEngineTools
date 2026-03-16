@@ -13,6 +13,7 @@
 
 namespace KryneEngine
 {
+    struct RenderTargetViewHandle;
     struct RenderPassHandle;
     class Window;
 
@@ -47,6 +48,7 @@ namespace ProjectManager
         KryneEngine::AllocatorInstance m_allocator;
         eastl::unique_ptr<Logger> m_logger;
         KryneEngine::GraphicsCommon::ApplicationInfo m_applicationInfo {};
+        KryneEngine::DynamicArray<KryneEngine::RenderTargetViewHandle> m_rtvs;
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;
         eastl::unique_ptr<KryneEngine::Window> m_window {};
         eastl::unique_ptr<KryneEngine::Modules::ImGui::Context> m_imguiContext {};
