@@ -10,6 +10,7 @@
 #include <KryneEngine/Core/Graphics/GraphicsContext.hpp>
 #include <KryneEngine/Core/Graphics/RenderPass.hpp>
 #include <KryneEngine/Core/Window/Window.hpp>
+#include <KryneEngine/Modules/GraphicsUtils/DeferredGraphicResourcesDestructor.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
 
 #include "Logger/CoreCategory.hpp"
@@ -75,6 +76,9 @@ namespace ProjectManager
         m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo, m_allocator);
         KryneEngine::GraphicsContext* graphicsContext = m_window->GetGraphicsContext();
 
+        m_deferredGraphicResourcesDestructor =
+            eastl::make_unique<KryneEngine::Modules::GraphicsUtils::DeferredGraphicResourcesDestructor>(m_allocator);
+
         m_rtvs.Resize(graphicsContext->GetFrameContextCount());
         m_renderPasses.Resize(graphicsContext->GetFrameContextCount());
         for (auto i = 0u; i < graphicsContext->GetFrameContextCount(); i++)
@@ -116,6 +120,8 @@ namespace ProjectManager
 
         do
         {
+            m_deferredGraphicResourcesDestructor->Flush(graphicsContext);
+
             if (m_window->ShouldResizeSwapChain())
             {
                 if (m_window->GetGraphicsContext()->ResizeSwapChain(m_window.get()))
@@ -128,8 +134,9 @@ namespace ProjectManager
             if (m_rtvs[swapChainIdx] != graphicsContext->GetPresentRenderTargetView(swapChainIdx))
             {
                 m_rtvs[swapChainIdx] = graphicsContext->GetPresentRenderTargetView(swapChainIdx);
-                // TODO: handle delayed destruction
-                // graphicsContext->DestroyRenderPass(m_renderPasses[swapChainIdx]);
+                m_deferredGraphicResourcesDestructor->DeferDestruction(
+                    m_renderPasses[swapChainIdx],
+                    graphicsContext->GetFrameId() + graphicsContext->GetFrameContextCount() - 1);
                 m_renderPasses[swapChainIdx] = graphicsContext->CreateRenderPass({
                     .m_colorAttachments = {
                         KryneEngine::RenderPassDesc::Attachment {

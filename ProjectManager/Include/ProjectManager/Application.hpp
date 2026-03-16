@@ -17,6 +17,11 @@ namespace KryneEngine
     struct RenderPassHandle;
     class Window;
 
+    namespace Modules::GraphicsUtils
+    {
+        class DeferredGraphicResourcesDestructor;
+    }
+
     namespace Modules::ImGui
     {
         class Context;
@@ -52,6 +57,7 @@ namespace ProjectManager
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;
         eastl::unique_ptr<KryneEngine::Window> m_window {};
         eastl::unique_ptr<KryneEngine::Modules::ImGui::Context> m_imguiContext {};
+        eastl::unique_ptr<KryneEngine::Modules::GraphicsUtils::DeferredGraphicResourcesDestructor> m_deferredGraphicResourcesDestructor;
 
         eastl::vector<IUiWindow*> m_uiWindows;
         eastl::unique_ptr<LogWindow> m_logWindow;
