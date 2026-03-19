@@ -22,7 +22,10 @@ add_library(ProjectManagerLib STATIC
         Source/Logger/CoreCategory.hpp
         Source/Logger/LogWindow.cpp
         Source/Logger/LogWindow.hpp
-        Include/ProjectManager/IUiWindow.hpp)
+        Include/ProjectManager/IUiWindow.hpp
+        Source/AssetCooker/AssetCooker.cpp
+        Include/ProjectManager/AssetCooker/AssetCooker.hpp
+        Include/ProjectManager/AssetCooker/IAssetPipeline.hpp)
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)
