@@ -13,6 +13,7 @@
 #include <KryneEngine/Modules/GraphicsUtils/DeferredGraphicResourcesDestructor.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
 
+#include "AssetCooker/AssetCookerWindow.hpp"
 #include "Logger/CoreCategory.hpp"
 #include "Logger/LogWindow.hpp"
 #include "ProjectManager/IUiWindow.hpp"
@@ -48,6 +49,9 @@ namespace ProjectManager
 
         m_logWindow = eastl::make_unique<LogWindow>(_allocator);
         m_uiWindows.push_back(m_logWindow.get());
+
+        m_assetCookerWindow = eastl::make_unique<AssetCookerWindow>(m_assetCooker.get());
+        m_uiWindows.push_back(m_assetCookerWindow.get());
 
         Logger::GetInstance()->RegisterCategory(kCoreLogCategory, "ProjectManagerCore");
 
@@ -174,6 +178,7 @@ namespace ProjectManager
                 ImGui::DockBuilderSplitNode(dockSpaceId, ImGuiDir_Up, 0.75f, &mainDockId, &logDockId);
 
                 ImGui::DockBuilderDockWindow("Main", mainDockId);
+                ImGui::DockBuilderDockWindow("AssetCooker", mainDockId);
                 ImGui::DockBuilderDockWindow("Log", logDockId);
                 ImGui::DockBuilderFinish(dockSpaceId);
             }

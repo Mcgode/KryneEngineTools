@@ -31,6 +31,7 @@ namespace KryneEngine
 namespace ProjectManager
 {
     class AssetCooker;
+    class AssetCookerWindow;
     class LogWindow;
     class IUiWindow;
     class Logger;
@@ -65,5 +66,6 @@ namespace ProjectManager
 
         eastl::vector<IUiWindow*> m_uiWindows;
         eastl::unique_ptr<LogWindow> m_logWindow;
+        eastl::unique_ptr<AssetCookerWindow> m_assetCookerWindow;
     };
 }

@@ -25,7 +25,10 @@ add_library(ProjectManagerLib STATIC
         Include/ProjectManager/IUiWindow.hpp
         Source/AssetCooker/AssetCooker.cpp
         Include/ProjectManager/AssetCooker/AssetCooker.hpp
-        Include/ProjectManager/AssetCooker/IAssetPipeline.hpp)
+        Include/ProjectManager/AssetCooker/IAssetPipeline.hpp
+        Source/AssetCooker/AssetCookerWindow.cpp
+        Source/AssetCooker/AssetCookerWindow.hpp
+)
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)
