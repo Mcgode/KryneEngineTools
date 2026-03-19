@@ -16,7 +16,10 @@ namespace ProjectManager
 {
     AssetCooker::AssetCooker()
         : m_pipelineMap(KryneEngine::AllocatorInstance {})
-    {}
+    {
+        Logger::GetInstance()->RegisterCategory(kLogCategory, "AssetCooker");
+        Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
+    }
 
     AssetCooker::~AssetCooker() = default;
 

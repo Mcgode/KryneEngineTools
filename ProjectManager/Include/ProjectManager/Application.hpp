@@ -30,6 +30,7 @@ namespace KryneEngine
 
 namespace ProjectManager
 {
+    class AssetCooker;
     class LogWindow;
     class IUiWindow;
     class Logger;
@@ -42,6 +43,8 @@ namespace ProjectManager
 
         void SetName(const eastl::string_view _name) { m_applicationInfo.m_applicationName = _name; }
 
+        [[nodiscard]] AssetCooker* GetAssetCooker() const { return m_assetCooker.get(); }
+
         void RegisterUiWindow(IUiWindow* _window);
 
         /**
@@ -52,6 +55,7 @@ namespace ProjectManager
     private:
         KryneEngine::AllocatorInstance m_allocator;
         eastl::unique_ptr<Logger> m_logger;
+        eastl::unique_ptr<AssetCooker> m_assetCooker;
         KryneEngine::GraphicsCommon::ApplicationInfo m_applicationInfo {};
         KryneEngine::DynamicArray<KryneEngine::RenderTargetViewHandle> m_rtvs;
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;

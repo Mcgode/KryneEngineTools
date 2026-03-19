@@ -16,6 +16,7 @@
 #include "Logger/CoreCategory.hpp"
 #include "Logger/LogWindow.hpp"
 #include "ProjectManager/IUiWindow.hpp"
+#include "ProjectManager/AssetCooker/AssetCooker.hpp"
 #include "ProjectManager/Logger/LogFilter.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
@@ -28,6 +29,8 @@ namespace ProjectManager
         , m_uiWindows(_allocator)
     {
         m_logger = eastl::make_unique<Logger>(_allocator);
+        m_assetCooker = eastl::make_unique<AssetCooker>();
+
         m_applicationInfo.m_applicationName.set_allocator(_allocator);
 
         m_applicationInfo.m_applicationVersion = { 0, 1, 0 };
