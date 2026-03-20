@@ -49,12 +49,13 @@ namespace ProjectManager
     {
         const auto lock = m_mutex.AutoLock();
 
+        KE_ASSERT(!m_running);
         KE_ASSERT(_pipeline != nullptr);
         KE_ASSERT(eastl::find(m_pipelines.begin(), m_pipelines.end(), _pipeline) == m_pipelines.end());
 
         m_pipelines.push_back(_pipeline);
 
-        for (eastl::string& extension: _pipeline->GetHandledAssetFileExtensions())
+        for (const char* extension: _pipeline->GetHandledAssetFileExtensions())
         {
             KryneEngine::StringHash extensionHash { extension };
 
@@ -101,5 +102,53 @@ namespace ProjectManager
 
         m_running = true;
         m_directoryMonitor = eastl::make_unique<DirectoryMonitor>(m_rawAssetDirectories);
+
+        eastl::vector<IAssetPipeline*> dirtyPipelines;
+        {
+            char sql[2048];
+            sqlite3_stmt* stmt;
+            for (IAssetPipeline* pipeline : m_pipelines)
+            {
+                bool matchedVersions = false;
+                snprintf(sql, sizeof(sql), "SELECT version FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
+                KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+                if (sqlite3_step(stmt) == SQLITE_ROW)
+                {
+                    KE_ASSERT(sqlite3_column_count(stmt) == 1);
+                    KE_ASSERT(sqlite3_column_type(stmt, 0) == SQLITE_INTEGER);
+                    const KryneEngine::u64 version = sqlite3_column_int64(stmt, 0);
+                    if (pipeline->GetVersion() == version)
+                    {
+                        matchedVersions = true;
+                    }
+                    else
+                    {
+                        Logger::GetInstance()->LogFormatted(
+                            LogSeverity::Info, kLogCategory,
+                            "Pipeline '%s' version mismatch, recooking", pipeline->GetName());
+                    }
+                }
+                else
+                {
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Info, kLogCategory,
+                        "No record for pipeline '%s', assume new", pipeline->GetName());
+                }
+                sqlite3_finalize(stmt);
+
+                if (matchedVersions)
+                    continue;
+
+                dirtyPipelines.push_back(pipeline);
+
+                snprintf(
+                    sql,
+                    sizeof(sql),
+                    "INSERT INTO assetPipelines (name, lastUpdate, version) VALUES ('%s', datetime('now'), %llu)",
+                    pipeline->GetName().data(),
+                    pipeline->GetVersion());
+                KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+            }
+        }
     }
 }
