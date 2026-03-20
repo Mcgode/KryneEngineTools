@@ -6,14 +6,16 @@
 
 #pragma once
 
+#include <EASTL/unique_ptr.h>
+#include <KryneEngine/Core/Common/StringHelpers.hpp>
+#include <KryneEngine/Core/Memory/Containers/FlatHashMap.hpp>
 #include <KryneEngine/Core/Threads/LightweightMutex.hpp>
 
-#include "KryneEngine/Core/Common/StringHelpers.hpp"
-#include "KryneEngine/Core/Memory/Containers/FlatHashMap.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
 namespace ProjectManager
 {
+    class DirectoryMonitor;
     class IAssetPipeline;
 
     class AssetCooker
@@ -28,6 +30,8 @@ namespace ProjectManager
 
         [[nodiscard]] bool AddRawAssetDirectory(eastl::string_view _directory);
 
+        void Run();
+
         static constexpr KryneEngine::u64 kLogCategory = Logger::MakeCategoryId("AssetCooker");
 
     private:
@@ -35,6 +39,8 @@ namespace ProjectManager
         eastl::vector<IAssetPipeline*> m_pipelines;
         eastl::string m_outputDirectory;
         eastl::vector<eastl::string> m_rawAssetDirectories;
+        bool m_running = false;
         KryneEngine::FlatHashMap<KryneEngine::StringHash, IAssetPipeline*> m_pipelineMap;
+        eastl::unique_ptr<DirectoryMonitor> m_directoryMonitor;
     };
 }

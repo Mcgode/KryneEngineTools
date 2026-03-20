@@ -11,6 +11,7 @@
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.inl>
 
 #include "ProjectManager/AssetCooker/IAssetPipeline.hpp"
+#include "AssetCooker/DirectoryMonitor.hpp"
 
 namespace ProjectManager
 {
@@ -43,6 +44,8 @@ namespace ProjectManager
     void AssetCooker::SetOutputDirectory(const eastl::string_view _directory)
     {
         const auto lock = m_mutex.AutoLock();
+        KE_ASSERT(!m_running);
+
         m_outputDirectory = _directory;
 
         const std::filesystem::path directory { m_outputDirectory.c_str() };
@@ -56,6 +59,8 @@ namespace ProjectManager
     {
         const auto lock = m_mutex.AutoLock();
 
+        KE_ASSERT(!m_running);
+
         if (!std::filesystem::exists(std::filesystem::path(_directory.data())))
             return false;
 
@@ -64,5 +69,16 @@ namespace ProjectManager
             return false;
         m_rawAssetDirectories.emplace_back(eastl::move(directory));
         return true;
+    }
+
+    void AssetCooker::Run()
+    {
+        const auto lock = m_mutex.AutoLock();
+
+        KE_ASSERT(!m_outputDirectory.empty());
+        KE_ASSERT(!m_rawAssetDirectories.empty());
+
+        m_running = true;
+        m_directoryMonitor = eastl::make_unique<DirectoryMonitor>(m_rawAssetDirectories);
     }
 }

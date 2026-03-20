@@ -28,9 +28,12 @@ add_library(ProjectManagerLib STATIC
         Include/ProjectManager/AssetCooker/IAssetPipeline.hpp
         Source/AssetCooker/AssetCookerWindow.cpp
         Source/AssetCooker/AssetCookerWindow.hpp
+        Source/AssetCooker/DirectoryMonitor.cpp
+        Source/AssetCooker/DirectoryMonitor.hpp
 )
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
+target_include_directories(ProjectManagerLib PRIVATE Source)
 target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)
 
 set_target_properties(ProjectManagerLib PROPERTIES FOLDER "EngineTools")

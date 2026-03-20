@@ -80,6 +80,8 @@ namespace ProjectManager
     {
         Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, "Begin finalizing setup");
 
+        m_assetCooker->Run();
+
         m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo, m_allocator);
         KryneEngine::GraphicsContext* graphicsContext = m_window->GetGraphicsContext();
 
