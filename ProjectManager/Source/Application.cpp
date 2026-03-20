@@ -23,16 +23,18 @@
 
 namespace ProjectManager
 {
-    Application::Application(const KryneEngine::AllocatorInstance _allocator)
+    Application::Application(const eastl::string_view _name, const KryneEngine::AllocatorInstance _allocator)
         : m_allocator(_allocator)
         , m_rtvs(_allocator)
         , m_renderPasses(_allocator)
         , m_uiWindows(_allocator)
     {
+        KE_ASSERT(!_name.empty());
+
         m_logger = eastl::make_unique<Logger>(_allocator);
         m_assetCooker = eastl::make_unique<AssetCooker>();
 
-        m_applicationInfo.m_applicationName.set_allocator(_allocator);
+        m_applicationInfo.m_applicationName = eastl::string(_name, _allocator);
 
         m_applicationInfo.m_applicationVersion = { 0, 1, 0 };
         m_applicationInfo.m_engineVersion = { 0, 1, 0 };

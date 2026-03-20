@@ -39,10 +39,10 @@ namespace ProjectManager
     class Application
     {
     public:
-        explicit Application(KryneEngine::AllocatorInstance _allocator = {});
+        explicit Application(
+            eastl::string_view _name,
+            KryneEngine::AllocatorInstance _allocator = {});
         ~Application();
-
-        void SetName(const eastl::string_view _name) { m_applicationInfo.m_applicationName = _name; }
 
         [[nodiscard]] AssetCooker* GetAssetCooker() const { return m_assetCooker.get(); }
 
