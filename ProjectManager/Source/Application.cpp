@@ -9,6 +9,7 @@
 #include <imgui_internal.h>
 #include <KryneEngine/Core/Graphics/GraphicsContext.hpp>
 #include <KryneEngine/Core/Graphics/RenderPass.hpp>
+#include <KryneEngine/Core/Platform/FileSystem.hpp>
 #include <KryneEngine/Core/Window/Window.hpp>
 #include <KryneEngine/Modules/GraphicsUtils/DeferredGraphicResourcesDestructor.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
@@ -18,6 +19,7 @@
 #include "Logger/LogWindow.hpp"
 #include "ProjectManager/IUiWindow.hpp"
 #include "ProjectManager/AssetCooker/AssetCooker.hpp"
+#include "ProjectManager/Database/Database.hpp"
 #include "ProjectManager/Logger/LogFilter.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
@@ -32,6 +34,13 @@ namespace ProjectManager
         KE_ASSERT(!_name.empty());
 
         m_logger = eastl::make_unique<Logger>(_allocator);
+
+        const std::filesystem::path dbParentPath = KryneEngine::Platform::GetDefaultConfigDirectory(_name);
+        const std::filesystem::path dbPath = dbParentPath / "ProjectManager.db";
+        if (!std::filesystem::exists(dbParentPath))
+            std::filesystem::create_directories(dbParentPath);
+        m_database = eastl::make_unique<Database>(dbPath.c_str());
+
         m_assetCooker = eastl::make_unique<AssetCooker>();
 
         m_applicationInfo.m_applicationName = eastl::string(_name, _allocator);

@@ -30,6 +30,7 @@ namespace KryneEngine
 
 namespace ProjectManager
 {
+    class Database;
     class AssetCooker;
     class AssetCookerWindow;
     class LogWindow;
@@ -56,6 +57,7 @@ namespace ProjectManager
     private:
         KryneEngine::AllocatorInstance m_allocator;
         eastl::unique_ptr<Logger> m_logger;
+        eastl::unique_ptr<Database> m_database;
         eastl::unique_ptr<AssetCooker> m_assetCooker;
         KryneEngine::GraphicsCommon::ApplicationInfo m_applicationInfo {};
         KryneEngine::DynamicArray<KryneEngine::RenderTargetViewHandle> m_rtvs;

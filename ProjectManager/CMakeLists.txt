@@ -10,6 +10,17 @@ add_library(yyjson STATIC Extern/yyjson-0.12.0/yyjson.c Extern/yyjson-0.12.0/yyj
 target_include_directories(yyjson PUBLIC Extern/yyjson-0.12.0)
 
 
+# Set up sqlite
+
+add_library(sqlite STATIC
+        Extern/sqlite-3.51.3/shell.c
+        Extern/sqlite-3.51.3/sqlite3.c
+        Extern/sqlite-3.51.3/sqlite3.h
+        Extern/sqlite-3.51.3/sqlite3ext.h
+)
+target_include_directories(sqlite PUBLIC Extern/sqlite-3.51.3)
+
+
 # Set up Project manager lib
 
 add_library(ProjectManagerLib STATIC
@@ -30,11 +41,15 @@ add_library(ProjectManagerLib STATIC
         Source/AssetCooker/AssetCookerWindow.hpp
         Source/AssetCooker/DirectoryMonitor.cpp
         Source/AssetCooker/DirectoryMonitor.hpp
+        Source/Database/Database.cpp
+        Include/ProjectManager/Database/Database.hpp
+        Include/ProjectManager/Database/DatabaseTable.hpp
+        Include/ProjectManager/Database/DatabaseType.hpp
 )
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_include_directories(ProjectManagerLib PRIVATE Source)
-target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui)
+target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui sqlite)
 
 set_target_properties(ProjectManagerLib PROPERTIES FOLDER "EngineTools")
 
