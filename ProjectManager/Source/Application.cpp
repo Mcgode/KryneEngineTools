@@ -41,7 +41,7 @@ namespace ProjectManager
             std::filesystem::create_directories(dbParentPath);
         m_database = eastl::make_unique<Database>(dbPath.c_str());
 
-        m_assetCooker = eastl::make_unique<AssetCooker>();
+        m_assetCooker = eastl::make_unique<AssetCooker>(m_database.get());
 
         m_applicationInfo.m_applicationName = eastl::string(_name, _allocator);
 

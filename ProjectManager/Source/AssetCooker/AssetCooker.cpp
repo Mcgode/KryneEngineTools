@@ -12,13 +12,34 @@
 
 #include "ProjectManager/AssetCooker/IAssetPipeline.hpp"
 #include "AssetCooker/DirectoryMonitor.hpp"
+#include "ProjectManager/Database/Database.hpp"
 
 namespace ProjectManager
 {
-    AssetCooker::AssetCooker()
-        : m_pipelineMap(KryneEngine::AllocatorInstance {})
+    AssetCooker::AssetCooker(Database* _database)
+        : m_database(_database)
+        , m_pipelineMap(KryneEngine::AllocatorInstance {})
     {
         Logger::GetInstance()->RegisterCategory(kLogCategory, "AssetCooker");
+
+        Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "Setting up AssetCooker database tables");
+
+        if (!m_database->TableExists("assets"))
+        {
+            Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'assets' database table");
+            const char* sql = "CREATE TABLE assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, lastUpdate DATE NOT NULL)";
+            const int result = m_database->Execute(sql);
+            KE_ASSERT(result == SQLITE_OK);
+        }
+
+        if (!m_database->TableExists("assetPipelines"))
+        {
+            Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'assetPipelines' database table");
+            const char* sql = "CREATE TABLE assetPipelines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, lastUpdate DATE NOT NULL, version BIGINT NOT NULL)";
+            const int result = m_database->Execute(sql);
+            KE_ASSERT(result == SQLITE_OK);
+        }
+
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
     }
 

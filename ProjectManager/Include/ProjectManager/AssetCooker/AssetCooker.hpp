@@ -15,13 +15,14 @@
 
 namespace ProjectManager
 {
+    class Database;
     class DirectoryMonitor;
     class IAssetPipeline;
 
     class AssetCooker
     {
     public:
-        AssetCooker();
+        explicit AssetCooker(Database* _database);
         ~AssetCooker();
 
         void RegisterPipeline(IAssetPipeline* _pipeline);
@@ -35,6 +36,7 @@ namespace ProjectManager
         static constexpr KryneEngine::u64 kLogCategory = Logger::MakeCategoryId("AssetCooker");
 
     private:
+        Database* m_database;
         KryneEngine::LightweightMutex m_mutex;
         eastl::vector<IAssetPipeline*> m_pipelines;
         eastl::string m_outputDirectory;

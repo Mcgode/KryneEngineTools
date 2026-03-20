@@ -19,7 +19,8 @@ namespace ProjectManager
 
         [[nodiscard]] bool TableExists(eastl::string_view _tableName) const;
 
-        [[nodiscard]] int Execute(eastl::string_view _sql, sqlite3_stmt** _pStmt) const;
+        [[nodiscard]] int Execute(eastl::string_view _sql) const;
+        [[nodiscard]] int Prepare(eastl::string_view _sql, sqlite3_stmt** _pStmt) const;
 
     private:
         sqlite3* m_database { nullptr };

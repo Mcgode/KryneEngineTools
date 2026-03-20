@@ -42,7 +42,12 @@ namespace ProjectManager
         return exists;
     }
 
-    int Database::Execute(const eastl::string_view _sql, sqlite3_stmt** _pStmt) const
+    int Database::Execute(eastl::string_view _sql) const
+    {
+        return sqlite3_exec(m_database, _sql.data(), nullptr, nullptr, nullptr);
+    }
+
+    int Database::Prepare(const eastl::string_view _sql, sqlite3_stmt** _pStmt) const
     {
         return sqlite3_prepare_v2(m_database, _sql.data(), static_cast<int>(_sql.size()), _pStmt, nullptr);
     }
