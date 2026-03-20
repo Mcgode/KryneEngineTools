@@ -51,6 +51,17 @@ namespace ProjectManager
             eastl::string_view _shortMessage,
             eastl::string_view _longMessage = {});
 
+        template <class... Args>
+        void LogFormatted(
+            const LogSeverity _severity,
+            const KryneEngine::u64 _category,
+            const char* _format,
+            Args... _args)
+        {
+            eastl::string message(m_allocator);
+            Log(_severity, _category, message.sprintf(_format, _args...));
+        }
+
         eastl::vector<MessageView> GetMessageViews(
             const LogFilter& _filter,
             KryneEngine::AllocatorInstance _allocator) const;
