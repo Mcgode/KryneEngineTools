@@ -14,7 +14,7 @@ namespace ProjectManager
     class DirectoryMonitor
     {
     public:
-        explicit DirectoryMonitor(eastl::span<eastl::string> _directories);
+        explicit DirectoryMonitor(eastl::span<std::filesystem::path> _directories);
 
         ~DirectoryMonitor();
 

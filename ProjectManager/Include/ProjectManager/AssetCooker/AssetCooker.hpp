@@ -42,14 +42,19 @@ namespace ProjectManager
         Database* m_database;
         KryneEngine::LightweightMutex m_mutex;
         eastl::vector<IAssetPipeline*> m_pipelines;
-        eastl::string m_outputDirectory;
-        eastl::vector<eastl::string> m_rawAssetDirectories;
+        std::filesystem::path m_outputDirectory;
+        eastl::vector<std::filesystem::path> m_rawAssetDirectories;
         bool m_running = false;
         KryneEngine::FlatHashMap<KryneEngine::StringHash, IAssetPipeline*> m_pipelineMap;
         eastl::unique_ptr<DirectoryMonitor> m_directoryMonitor;
 
         std::thread m_probingThread;
-        using QueueEntry = eastl::pair<eastl::string, IAssetPipeline*>;
+        struct QueueEntry
+        {
+            std::filesystem::path m_asset;
+            std::filesystem::path m_assetDirectory;
+            IAssetPipeline* m_pipeline;
+        };
         eastl::queue<QueueEntry> m_updateQueue;
 
         void ProbeDirectory(

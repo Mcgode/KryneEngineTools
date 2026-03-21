@@ -13,11 +13,11 @@
 
 namespace ProjectManager
 {
-    DirectoryMonitor::DirectoryMonitor(eastl::span<eastl::string> _directories)
+    DirectoryMonitor::DirectoryMonitor(const eastl::span<std::filesystem::path> _directories)
     {
         KryneEngine::DynamicArray<eastl::string_view> directories(_directories.size());
         for (auto i = 0u; i < _directories.size(); ++i)
-            directories[i] = _directories[i];
+            directories[i] = _directories[i].c_str();
 
         const KryneEngine::Platform::DirectoryMonitorCreateInfo createInfo {
             .m_directories = { directories.Data(), directories.Size() },

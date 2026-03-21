@@ -74,7 +74,7 @@ namespace ProjectManager
         const auto lock = m_mutex.AutoLock();
         KE_ASSERT(!m_running);
 
-        m_outputDirectory = _directory;
+        m_outputDirectory = std::filesystem::canonical(_directory.data());
 
         const std::filesystem::path directory { m_outputDirectory.c_str() };
         if (!std::filesystem::exists(directory))
@@ -92,10 +92,10 @@ namespace ProjectManager
         if (!std::filesystem::exists(std::filesystem::path(_directory.data())))
             return false;
 
-        const eastl::string directory { _directory };
+        const std::filesystem::path directory = std::filesystem::canonical(_directory.data());
         if (eastl::find(m_rawAssetDirectories.begin(), m_rawAssetDirectories.end(), directory) != m_rawAssetDirectories.end())
             return false;
-        m_rawAssetDirectories.emplace_back(eastl::move(directory));
+        m_rawAssetDirectories.emplace_back(directory);
         return true;
     }
 
@@ -167,9 +167,9 @@ namespace ProjectManager
 
             Logger::GetInstance()->LogFormatted(LogSeverity::Verbose, kLogCategory, "Probing asset directories");
             const auto start = std::chrono::high_resolution_clock::now();
-            for (auto directory: m_rawAssetDirectories)
+            for (const auto& directory: m_rawAssetDirectories)
             {
-                ProbeDirectory({ directory.data() }, _dirtyPipelines, _timepointMs);
+                ProbeDirectory(directory, _dirtyPipelines, _timepointMs);
             }
             const auto end = std::chrono::high_resolution_clock::now();
             Logger::GetInstance()->LogFormatted(
@@ -227,7 +227,11 @@ namespace ProjectManager
             if (dirtyIt == _dirtyPipelines.end() && lastUpdate < timePoint)
                 continue;
 
-            m_updateQueue.emplace(path.c_str(), pipelineIt->second);
+            m_updateQueue.emplace(QueueEntry {
+                path,
+                _path,
+                pipelineIt->second,
+            });
         }
     }
 }
