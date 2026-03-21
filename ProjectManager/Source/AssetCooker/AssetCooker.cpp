@@ -254,14 +254,27 @@ namespace ProjectManager
                 sqlite3_finalize(stmt);
             }
 
-            const eastl::string extension = path.extension().c_str();
-            const KryneEngine::StringHash extensionHash { extension.c_str() };
-            const auto pipelineIt = m_pipelineMap.Find(extensionHash);
-            if (pipelineIt == m_pipelineMap.end())
+            IAssetPipeline* pipeline = nullptr;
+            {
+                eastl::string filename = entry.path().filename().c_str();
+                size_t pos = filename.find_first_of('.');
+                while (pos != eastl::string::npos)
+                {
+                    const eastl::string extension = filename.substr(pos);
+                    const auto pipelineIt = m_pipelineMap.Find(KryneEngine::StringHash(extension));
+                    if (pipelineIt != m_pipelineMap.end())
+                    {
+                        pipeline = pipelineIt->second;
+                        break;
+                    }
+                    pos = filename.find_first_of('.', pos + 1);
+                }
+            }
+            if (pipeline == nullptr)
                 continue;
 
             const KryneEngine::u64 timePoint = std::chrono::duration_cast<std::chrono::milliseconds>(entry.last_write_time().time_since_epoch()).count();
-            const auto dirtyIt = _dirtyPipelines.find(pipelineIt->second);
+            const auto dirtyIt = _dirtyPipelines.find(pipeline);
 
             if (dirtyIt == _dirtyPipelines.end() && lastUpdate < timePoint)
                 continue;
@@ -271,7 +284,7 @@ namespace ProjectManager
                 m_updateQueue.emplace(QueueEntry {
                     path,
                     _path,
-                    pipelineIt->second,
+                    pipeline,
                 });
                 m_queueCondition.notify_all();
             }
