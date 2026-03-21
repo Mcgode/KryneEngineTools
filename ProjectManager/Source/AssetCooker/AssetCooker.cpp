@@ -41,10 +41,19 @@ namespace ProjectManager
         }
 
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
+
+        m_workThreads.Resize(eastl::max(1u, std::thread::hardware_concurrency() - 1));
     }
 
     AssetCooker::~AssetCooker()
     {
+        m_stopWork = true;
+        for (auto& workThread: m_workThreads)
+        {
+            if (workThread.joinable())
+                workThread.join();
+        }
+
         if (m_probingThread.joinable())
         {
             m_probingThread.join();
@@ -177,6 +186,35 @@ namespace ProjectManager
                 "Probing asset directories took %.3f ms",
                 static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000.f);
         }, eastl::move(dirtyPipelines), timepointMs);
+
+        m_workThreads.InitAll([this]
+        {
+            QueueEntry entry;
+            while (!m_stopWork)
+            {
+                {
+                    auto queueLock = std::unique_lock(m_queueMutex);
+                    m_queueCondition.wait(queueLock, [this] { return !m_updateQueue.empty() || m_stopWork; });
+                    if (m_stopWork)
+                        break;
+
+                    entry = m_updateQueue.front();
+                    m_updateQueue.pop();
+                }
+
+                const std::filesystem::path relativePath = entry.m_asset.lexically_relative(entry.m_assetDirectory);
+                KE_ZoneScopedF("Processing '%s'", relativePath.c_str());
+
+                const IAssetPipeline::CookResult result = entry.m_pipeline->CookAsset(
+                    relativePath.c_str(),
+                    entry.m_assetDirectory.c_str(),
+                    m_outputDirectory.c_str());
+
+                if (!result.success)
+                    Logger::GetInstance()->LogFormatted(LogSeverity::Error, kLogCategory,
+                        "Failed to cook '%s'", relativePath.c_str());
+            }
+        });
     }
 
     void AssetCooker::ProbeDirectory(
@@ -227,11 +265,15 @@ namespace ProjectManager
             if (dirtyIt == _dirtyPipelines.end() && lastUpdate < timePoint)
                 continue;
 
-            m_updateQueue.emplace(QueueEntry {
-                path,
-                _path,
-                pipelineIt->second,
-            });
+            {
+                auto lock = std::unique_lock(m_queueMutex);
+                m_updateQueue.emplace(QueueEntry {
+                    path,
+                    _path,
+                    pipelineIt->second,
+                });
+                m_queueCondition.notify_all();
+            }
         }
     }
 }

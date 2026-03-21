@@ -14,6 +14,7 @@
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.hpp>
 #include <KryneEngine/Core/Threads/LightweightMutex.hpp>
 
+#include "KryneEngine/Core/Memory/DynamicArray.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
 namespace ProjectManager
@@ -51,11 +52,16 @@ namespace ProjectManager
         std::thread m_probingThread;
         struct QueueEntry
         {
-            std::filesystem::path m_asset;
-            std::filesystem::path m_assetDirectory;
-            IAssetPipeline* m_pipeline;
+            std::filesystem::path m_asset {};
+            std::filesystem::path m_assetDirectory {};
+            IAssetPipeline* m_pipeline = nullptr;
         };
+        std::mutex m_queueMutex;
+        std::condition_variable m_queueCondition;
         eastl::queue<QueueEntry> m_updateQueue;
+
+        KryneEngine::DynamicArray<std::thread> m_workThreads;
+        volatile bool m_stopWork = false;
 
         void ProbeDirectory(
             const std::filesystem::path& _path,
