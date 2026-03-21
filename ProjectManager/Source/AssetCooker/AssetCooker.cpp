@@ -322,7 +322,9 @@ namespace ProjectManager
                     }
 
                     const KryneEngine::u64 pipelineVersion = sqlite3_column_int64(stmt, 2);
-                    if (std::filesystem::last_write_time(cookedOutputPath) < assetWriteTime || pipelineVersion != pipeline->GetVersion())
+                    if (pipelineVersion != pipeline->GetVersion()
+                        || !std::filesystem::exists(cookedOutputPath)
+                        || std::filesystem::last_write_time(cookedOutputPath) < assetWriteTime)
                     {
                         upToDate = false;
                         if (std::filesystem::exists(cookedOutputPath))
