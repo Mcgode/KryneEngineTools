@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <filesystem>
+#include <EASTL/queue.h>
+#include <EASTL/vector_set.h>
 #include <EASTL/unique_ptr.h>
 #include <KryneEngine/Core/Common/StringHelpers.hpp>
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.hpp>
@@ -44,5 +47,13 @@ namespace ProjectManager
         bool m_running = false;
         KryneEngine::FlatHashMap<KryneEngine::StringHash, IAssetPipeline*> m_pipelineMap;
         eastl::unique_ptr<DirectoryMonitor> m_directoryMonitor;
+
+        using QueueEntry = eastl::pair<eastl::string, IAssetPipeline*>;
+        eastl::queue<QueueEntry> m_updateQueue;
+
+        void ProbeDirectory(
+            const std::filesystem::path& _path,
+            const eastl::vector_set<IAssetPipeline*>& _dirtyPipelines,
+            KryneEngine::u64 _timepointMs);
     };
 }
