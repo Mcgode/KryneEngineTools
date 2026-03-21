@@ -55,10 +55,14 @@ namespace ProjectManager
             std::filesystem::path m_asset {};
             std::filesystem::path m_assetDirectory {};
             IAssetPipeline* m_pipeline = nullptr;
+            KryneEngine::u32 m_assetId = 0;
+            KryneEngine::u32 m_pipelineId = 0;
+            bool m_forceCook = false;
         };
         std::mutex m_queueMutex;
         std::condition_variable m_queueCondition;
         eastl::queue<QueueEntry> m_updateQueue;
+        eastl::vector_map<std::filesystem::path, KryneEngine::u32> m_cookingAssets;
 
         KryneEngine::DynamicArray<std::thread> m_workThreads;
         volatile bool m_stopWork = false;

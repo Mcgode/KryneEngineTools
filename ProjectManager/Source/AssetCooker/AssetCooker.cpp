@@ -195,6 +195,9 @@ namespace ProjectManager
         m_workThreads.InitAll([this]
         {
             QueueEntry entry;
+            char sql[2048];
+            sqlite3_stmt* stmt;
+
             while (!m_stopWork)
             {
                 {
@@ -205,19 +208,108 @@ namespace ProjectManager
 
                     entry = m_updateQueue.front();
                     m_updateQueue.pop();
+
+                    // If the asset is already cooking, notify the cooker indirectly that the asset will need another
+                    // re-cook.
+                    // It will force the re-cook, which is not ideal if it was a double request for the same change, but
+                    // these are expected to be rare.
+                    const auto it = m_cookingAssets.find(entry.m_asset);
+                    if (it != m_cookingAssets.end())
+                    {
+                        it->second++;
+                        continue;
+                    }
+                    m_cookingAssets.emplace(entry.m_asset, 0);
+                }
+
+                bool upToDate = false;
+                if (!entry.m_forceCook)
+                {
+                    const auto assetWriteTime = std::filesystem::last_write_time(entry.m_asset);
+                    snprintf(
+                        sql, sizeof(sql),
+                        "SELECT cookedAssets.path FROM cookedAssets JOIN assets ON assets.id = cookedAssets.sourceId WHERE assets.path = '%s'",
+                        entry.m_asset.c_str());
+                    KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+                    if (sqlite3_step(stmt) == SQLITE_ROW)
+                    {
+                        upToDate = true;
+                        do
+                        {
+                            const std::filesystem::path cookedOutputPath {
+                                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0) };
+
+                            if (!std::filesystem::exists(cookedOutputPath))
+                            {
+                                upToDate = false;
+                                continue;
+                            }
+
+                            if (std::filesystem::last_write_time(cookedOutputPath) < assetWriteTime)
+                            {
+                                upToDate = false;
+                            }
+                        }
+                        while (sqlite3_step(stmt) == SQLITE_ROW);
+                    }
                 }
 
                 const std::filesystem::path relativePath = entry.m_asset.lexically_relative(entry.m_assetDirectory);
                 KE_ZoneScopedF("Processing '%s'", relativePath.c_str());
 
-                const IAssetPipeline::CookResult result = entry.m_pipeline->CookAsset(
-                    relativePath.c_str(),
-                    entry.m_assetDirectory.c_str(),
-                    m_outputDirectory.c_str());
+                bool shouldRecook = false;
+                do
+                {
+                    if (!upToDate)
+                    {
+                        const IAssetPipeline::CookResult result = entry.m_pipeline->CookAsset(
+                           relativePath.c_str(),
+                           entry.m_assetDirectory.c_str(),
+                           m_outputDirectory.c_str());
+                       if (!result.success)
+                       {
+                           Logger::GetInstance()->LogFormatted(LogSeverity::Error, kLogCategory,
+                               "Failed to cook '%s'", relativePath.c_str());
+                           continue;
+                       }
 
-                if (!result.success)
-                    Logger::GetInstance()->LogFormatted(LogSeverity::Error, kLogCategory,
-                        "Failed to cook '%s'", relativePath.c_str());
+                       KE_VERIFY(!result.m_resultingFiles.empty());
+
+                       snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", entry.m_assetId);
+                       KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+                       const KryneEngine::u64 pipelineVersion = entry.m_pipeline->GetVersion();
+                       for (const auto& file: result.m_resultingFiles)
+                       {
+                           const std::filesystem::path cookedOutputPath { m_outputDirectory / file };
+                           snprintf(sql, sizeof(sql), "INSERT INTO cookedAssets (sourceId, path, pipeline, pipelineVersion) VALUES (%d, '%s', %d, %llu)",
+                               entry.m_assetId,
+                               cookedOutputPath.c_str(),
+                               entry.m_pipelineId,
+                               pipelineVersion);
+                       }
+                    }
+
+                    {
+                        const std::unique_lock recookLock(m_queueMutex);
+
+                        auto it = m_cookingAssets.find(entry.m_asset);
+
+                        if (it->second > 0)
+                        {
+                            it->second--;
+                            shouldRecook = true;
+                            upToDate = false;
+                        }
+                        else
+                        {
+                            m_cookingAssets.erase(it);
+                            shouldRecook = false;
+                        }
+                    }
+                }
+                while (shouldRecook);
             }
         });
     }
@@ -350,9 +442,11 @@ namespace ProjectManager
             {
                 auto lock = std::unique_lock(m_queueMutex);
                 m_updateQueue.emplace(QueueEntry {
-                    path,
-                    _path,
-                    pipeline,
+                    .m_asset = path,
+                    .m_assetDirectory = _path,
+                    .m_pipeline = pipeline,
+                    .m_assetId = assetId,
+                    .m_pipelineId = pipelineId,
                 });
                 m_queueCondition.notify_all();
             }
