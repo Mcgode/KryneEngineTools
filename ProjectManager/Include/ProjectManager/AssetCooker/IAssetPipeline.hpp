@@ -22,6 +22,15 @@ namespace ProjectManager
 
         [[nodiscard]] virtual eastl::span<const char*> GetHandledAssetFileExtensions() const = 0;
 
-        [[nodiscard]] virtual bool CookAsset(eastl::string_view _assetPath) = 0;
+        struct CookResult
+        {
+            bool success;
+            eastl::vector<std::filesystem::path> m_resultingFiles;
+        };
+
+        [[nodiscard]] virtual CookResult CookAsset(
+            eastl::string_view _assetRelativePath,
+            eastl::string_view _assetDirectory,
+            eastl::string_view _outputDir) = 0;
     };
 }
