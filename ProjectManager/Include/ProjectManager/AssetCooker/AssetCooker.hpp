@@ -64,8 +64,6 @@ namespace ProjectManager
         volatile bool m_stopWork = false;
 
         void ProbeDirectory(
-            const std::filesystem::path& _path,
-            const eastl::vector_set<IAssetPipeline*>& _dirtyPipelines,
-            KryneEngine::u64 _timepointMs);
+            const std::filesystem::path& _path);
     };
 }

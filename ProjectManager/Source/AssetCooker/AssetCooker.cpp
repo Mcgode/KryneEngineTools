@@ -27,7 +27,7 @@ namespace ProjectManager
         if (!m_database->TableExists("assets"))
         {
             Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'assets' database table");
-            const char* sql = "CREATE TABLE assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, lastUpdate BIGINT NOT NULL)";
+            const char* sql = "CREATE TABLE assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL)";
             const int result = m_database->Execute(sql);
             KE_ASSERT(result == SQLITE_OK);
         }
@@ -35,7 +35,15 @@ namespace ProjectManager
         if (!m_database->TableExists("assetPipelines"))
         {
             Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'assetPipelines' database table");
-            const char* sql = "CREATE TABLE assetPipelines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, lastUpdate BIGINT NOT NULL, version BIGINT NOT NULL)";
+            const char* sql = "CREATE TABLE assetPipelines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, version BIGINT NOT NULL)";
+            const int result = m_database->Execute(sql);
+            KE_ASSERT(result == SQLITE_OK);
+        }
+
+        if (!m_database->TableExists("cookedAssets"))
+        {
+            Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'cookedAssets' database table");
+            const char* sql = "CREATE TABLE cookedAssets (sourceId INTEGER, path TEXT NOT NULL, pipeline INTEGER NOT NULL, pipelineVersion INTEGER NOT NULL)";
             const int result = m_database->Execute(sql);
             KE_ASSERT(result == SQLITE_OK);
         }
@@ -122,7 +130,6 @@ namespace ProjectManager
         const auto timepoint = std::filesystem::file_time_type::clock::now();
         const KryneEngine::u64 timepointMs = std::chrono::duration_cast<std::chrono::milliseconds>(timepoint.time_since_epoch()).count();
 
-        eastl::vector_set<IAssetPipeline*> dirtyPipelines;
         {
             char sql[2048];
             sqlite3_stmt* stmt;
@@ -158,20 +165,17 @@ namespace ProjectManager
                 if (matchedVersions)
                     continue;
 
-                dirtyPipelines.emplace(pipeline);
-
                 snprintf(
                     sql,
                     sizeof(sql),
-                    "INSERT INTO assetPipelines (name, lastUpdate, version) VALUES ('%s', %llu, %llu)",
+                    "INSERT INTO assetPipelines (name, version) VALUES ('%s', %llu)",
                     pipeline->GetName().data(),
-                    timepointMs,
                     pipeline->GetVersion());
                 KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
             }
         }
 
-        m_probingThread = std::thread([this](eastl::vector_set<IAssetPipeline*>&& _dirtyPipelines, const KryneEngine::u64 _timepointMs)
+        m_probingThread = std::thread([this]
         {
             KE_ZoneScoped("Initial asset directories probing");
 
@@ -179,14 +183,14 @@ namespace ProjectManager
             const auto start = std::chrono::high_resolution_clock::now();
             for (const auto& directory: m_rawAssetDirectories)
             {
-                ProbeDirectory(directory, _dirtyPipelines, _timepointMs);
+                ProbeDirectory(directory);
             }
             const auto end = std::chrono::high_resolution_clock::now();
             Logger::GetInstance()->LogFormatted(
                 LogSeverity::Info, kLogCategory,
                 "Probing asset directories took %.3f ms",
                 static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000.f);
-        }, eastl::move(dirtyPipelines), timepointMs);
+        });
 
         m_workThreads.InitAll([this]
         {
@@ -218,10 +222,7 @@ namespace ProjectManager
         });
     }
 
-    void AssetCooker::ProbeDirectory(
-        const std::filesystem::path& _path,
-        const eastl::vector_set<IAssetPipeline*>& _dirtyPipelines,
-        const KryneEngine::u64 _timepointMs)
+    void AssetCooker::ProbeDirectory(const std::filesystem::path& _path)
     {
         char sql[2048];
         sqlite3_stmt* stmt;
@@ -234,8 +235,7 @@ namespace ProjectManager
 
             const std::filesystem::path path = canonical(entry.path());
 
-            KryneEngine::u64 lastUpdate = 0;
-            snprintf(sql, sizeof(sql), "SELECT lastUpdate FROM assets WHERE path = '%s'", path.c_str());
+            snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", path.c_str());
             KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
             if (sqlite3_step(stmt) != SQLITE_ROW)
             {
@@ -243,14 +243,12 @@ namespace ProjectManager
                 snprintf(
                     sql,
                     sizeof(sql),
-                    "INSERT INTO assets (path, lastUpdate) VALUES ('%s', %llu)",
-                    path.c_str(),
-                    _timepointMs);
+                    "INSERT INTO assets (path) VALUES ('%s')",
+                    path.c_str());
                 KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
             }
             else
             {
-                lastUpdate = sqlite3_column_int64(stmt, 0);
                 sqlite3_finalize(stmt);
             }
 
@@ -271,13 +269,34 @@ namespace ProjectManager
                 }
             }
             if (pipeline == nullptr)
-                continue;
+            {
+                // No pipeline for the asset file, clean up all related cooked files, if there are any.
 
-            const KryneEngine::u64 timePoint = std::chrono::duration_cast<std::chrono::milliseconds>(entry.last_write_time().time_since_epoch()).count();
-            const auto dirtyIt = _dirtyPipelines.find(pipeline);
+                snprintf(
+                    sql,
+                    sizeof(sql),
+                    "SELECT cookedAssets.path FROM assets JOIN cookedAssets ON assets.id = cookedAssets.sourceId WHERE assets.path = '%s'",
+                    path.c_str());
+                KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+                while (sqlite3_step(stmt) == SQLITE_ROW)
+                {
+                    std::filesystem::path cookedOutputPath {
+                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0) };
+                    if (std::filesystem::exists(cookedOutputPath))
+                    {
+                        std::filesystem::remove(cookedOutputPath);
+                    }
+                }
+                sqlite3_finalize(stmt);
 
-            if (dirtyIt == _dirtyPipelines.end() && lastUpdate < timePoint)
+                snprintf(
+                    sql, sizeof(sql),
+                    "DELETE FROM cookedAssets WHERE sourceId = (SELECT id FROM assets WHERE path = '%s')", path.c_str());
+                KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
                 continue;
+            }
 
             {
                 auto lock = std::unique_lock(m_queueMutex);
