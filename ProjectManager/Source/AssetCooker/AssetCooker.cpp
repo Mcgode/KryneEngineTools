@@ -48,6 +48,7 @@ namespace ProjectManager
     AssetCooker::~AssetCooker()
     {
         m_stopWork = true;
+        m_queueCondition.notify_all();
         for (auto& workThread: m_workThreads)
         {
             if (workThread.joinable())
