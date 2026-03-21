@@ -212,6 +212,7 @@ namespace ProjectManager
             else
             {
                 lastUpdate = sqlite3_column_int64(stmt, 0);
+                sqlite3_finalize(stmt);
             }
 
             const eastl::string extension = path.extension().c_str();
