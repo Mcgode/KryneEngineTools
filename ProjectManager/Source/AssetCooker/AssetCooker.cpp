@@ -10,6 +10,7 @@
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.inl>
 
 #include "AssetCooker/DirectoryMonitor.hpp"
+#include "KryneEngine/Core/Profiling/TracyHeader.hpp"
 #include "ProjectManager/AssetCooker/IAssetPipeline.hpp"
 #include "ProjectManager/Database/Database.hpp"
 
@@ -42,7 +43,13 @@ namespace ProjectManager
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
     }
 
-    AssetCooker::~AssetCooker() = default;
+    AssetCooker::~AssetCooker()
+    {
+        if (m_probingThread.joinable())
+        {
+            m_probingThread.join();
+        }
+    }
 
     void AssetCooker::RegisterPipeline(IAssetPipeline* _pipeline)
     {
@@ -154,10 +161,22 @@ namespace ProjectManager
             }
         }
 
-        for (auto directory: m_rawAssetDirectories)
+        m_probingThread = std::thread([this](eastl::vector_set<IAssetPipeline*>&& _dirtyPipelines, const KryneEngine::u64 _timepointMs)
         {
-            ProbeDirectory({ directory.data() }, dirtyPipelines, timepointMs);
-        }
+            KE_ZoneScoped("Initial asset directories probing");
+
+            Logger::GetInstance()->LogFormatted(LogSeverity::Verbose, kLogCategory, "Probing asset directories");
+            const auto start = std::chrono::high_resolution_clock::now();
+            for (auto directory: m_rawAssetDirectories)
+            {
+                ProbeDirectory({ directory.data() }, _dirtyPipelines, _timepointMs);
+            }
+            const auto end = std::chrono::high_resolution_clock::now();
+            Logger::GetInstance()->LogFormatted(
+                LogSeverity::Info, kLogCategory,
+                "Probing asset directories took %.3f ms",
+                static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000.f);
+        }, eastl::move(dirtyPipelines), timepointMs);
     }
 
     void AssetCooker::ProbeDirectory(

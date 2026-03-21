@@ -48,6 +48,7 @@ namespace ProjectManager
         KryneEngine::FlatHashMap<KryneEngine::StringHash, IAssetPipeline*> m_pipelineMap;
         eastl::unique_ptr<DirectoryMonitor> m_directoryMonitor;
 
+        std::thread m_probingThread;
         using QueueEntry = eastl::pair<eastl::string, IAssetPipeline*>;
         eastl::queue<QueueEntry> m_updateQueue;
 
