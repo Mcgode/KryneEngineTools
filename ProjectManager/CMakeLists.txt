@@ -24,7 +24,7 @@ target_include_directories(sqlite PUBLIC Extern/sqlite-3.51.3)
 # Set up Project manager lib
 
 add_library(ProjectManagerLib STATIC
-    Source/Application.cpp
+        Source/Application.cpp
         Include/ProjectManager/Application.hpp
         Source/Logger/Logger.cpp
         Include/ProjectManager/Logger/Logger.hpp
@@ -43,8 +43,6 @@ add_library(ProjectManagerLib STATIC
         Source/AssetCooker/DirectoryMonitor.hpp
         Source/Database/Database.cpp
         Include/ProjectManager/Database/Database.hpp
-        Include/ProjectManager/Database/DatabaseTable.hpp
-        Include/ProjectManager/Database/DatabaseType.hpp
 )
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
