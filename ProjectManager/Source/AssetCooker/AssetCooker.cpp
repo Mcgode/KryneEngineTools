@@ -288,6 +288,7 @@ namespace ProjectManager
                                cookedOutputPath.c_str(),
                                entry.m_pipelineId,
                                pipelineVersion);
+                           KE_ASSERT(m_database->Execute(sql) == SQLITE_OK);
                        }
                     }
 
