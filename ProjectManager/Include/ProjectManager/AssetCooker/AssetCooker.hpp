@@ -25,6 +25,8 @@ namespace ProjectManager
 
     class AssetCooker
     {
+        friend DirectoryMonitor;
+
     public:
         explicit AssetCooker(Database* _database);
         ~AssetCooker();
@@ -69,5 +71,15 @@ namespace ProjectManager
 
         void ProbeDirectory(
             const std::filesystem::path& _path);
+
+        void ProbeInputAsset(const std::filesystem::path& _asset, const std::filesystem::path& _assetDirectory = {});
+
+        void ProbeOutputAsset(const std::filesystem::path& _asset);
+
+        void OnInputAssetRenamed(const std::filesystem::path& _oldPath, const std::filesystem::path& _newPath) const;
+
+        void OnInputAssetDeleted(const std::filesystem::path& _asset) const;
+
+        IAssetPipeline* FindPipeline(const std::filesystem::path& _asset);
     };
 }

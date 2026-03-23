@@ -11,14 +11,19 @@
 
 namespace ProjectManager
 {
+    class AssetCooker;
+
     class DirectoryMonitor
     {
     public:
-        explicit DirectoryMonitor(eastl::span<std::filesystem::path> _directories);
+        explicit DirectoryMonitor(AssetCooker* _assetCooker);
 
         ~DirectoryMonitor();
 
     private:
+        AssetCooker* m_assetCooker;
         KryneEngine::Platform::DirectoryMonitorHandle m_handle { KryneEngine::Platform::OpaqueHandle(nullptr) };
+
+        [[nodiscard]] bool IsOutputFile(const std::filesystem::path& _path) const;
     };
 } // ProjectManager

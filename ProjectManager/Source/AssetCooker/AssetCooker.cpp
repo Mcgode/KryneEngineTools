@@ -125,7 +125,7 @@ namespace ProjectManager
         KE_ASSERT(!m_rawAssetDirectories.empty());
 
         m_running = true;
-        m_directoryMonitor = eastl::make_unique<DirectoryMonitor>(m_rawAssetDirectories);
+        m_directoryMonitor = eastl::make_unique<DirectoryMonitor>(this);
 
         const auto timepoint = std::filesystem::file_time_type::clock::now();
         const KryneEngine::u64 timepointMs = std::chrono::duration_cast<std::chrono::milliseconds>(timepoint.time_since_epoch()).count();
@@ -331,8 +331,6 @@ namespace ProjectManager
 
     void AssetCooker::ProbeDirectory(const std::filesystem::path& _path)
     {
-        char sql[2048];
-        sqlite3_stmt* stmt;
 
         for (std::filesystem::recursive_directory_iterator it(_path); it != std::filesystem::recursive_directory_iterator(); ++it)
         {
@@ -342,169 +340,280 @@ namespace ProjectManager
 
             const std::filesystem::path path = canonical(entry.path());
 
-            snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", path.c_str());
-            KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
-            if (sqlite3_step(stmt) != SQLITE_ROW)
-            {
-                sqlite3_finalize(stmt);
+            ProbeInputAsset(path, _path);
+        }
+    }
 
-                snprintf(sql, sizeof(sql), "INSERT INTO assets (path) VALUES ('%s') RETURNING id", path.c_str());
-                KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
-                KE_VERIFY(sqlite3_step(stmt) == SQLITE_ROW);
+    void AssetCooker::ProbeInputAsset(const std::filesystem::path& _asset, const std::filesystem::path& _assetDirectory)
+    {
+        char sql[2048];
+        sqlite3_stmt* stmt;
+        std::filesystem::path parent;
+        if (!_assetDirectory.empty())
+            parent = _assetDirectory;
+        else
+        {
+            for (const auto& directory: m_rawAssetDirectories)
+            {
+                const auto relative = std::filesystem::relative(_asset, directory);
+                if (relative.begin()->string() != "..")
+                {
+                    parent = directory;
+                    break;
+                }
             }
-            const KryneEngine::u32 assetId = sqlite3_column_int(stmt, 0);
+            KE_ASSERT(!parent.empty());
+        }
+
+        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.c_str());
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        if (sqlite3_step(stmt) != SQLITE_ROW)
+        {
             sqlite3_finalize(stmt);
 
-            IAssetPipeline* pipeline = nullptr;
-            {
-                eastl::string filename = entry.path().filename().c_str();
-                size_t pos = filename.find_first_of('.');
-                while (pos != eastl::string::npos)
-                {
-                    const eastl::string extension = filename.substr(pos);
-                    const auto pipelineIt = m_pipelineMap.Find(KryneEngine::StringHash(extension));
-                    if (pipelineIt != m_pipelineMap.end())
-                    {
-                        pipeline = pipelineIt->second;
-                        break;
-                    }
-                    pos = filename.find_first_of('.', pos + 1);
-                }
-            }
-            if (pipeline == nullptr)
-            {
-                // No pipeline for the asset file, clean up all related cooked files, if there are any.
-
-                snprintf(sql, sizeof(sql), "SELECT path FROM cookedAssets WHERE sourceId = %d", assetId);
-                KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
-                while (sqlite3_step(stmt) == SQLITE_ROW)
-                {
-                    std::filesystem::path cookedOutputPath {
-                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
-                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0) };
-                    if (std::filesystem::exists(cookedOutputPath))
-                    {
-                        std::filesystem::remove(cookedOutputPath);
-                    }
-                }
-                sqlite3_finalize(stmt);
-
-                snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", assetId);
-                KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
-
-                continue;
-            }
-
-            const auto assetWriteTime = std::filesystem::last_write_time(path);
-
-            snprintf(sql, sizeof(sql), "SELECT id FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
+            snprintf(sql, sizeof(sql), "INSERT INTO assets (path) VALUES ('%s') RETURNING id", _asset.c_str());
             KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
             KE_VERIFY(sqlite3_step(stmt) == SQLITE_ROW);
-            const KryneEngine::u32 pipelineId = sqlite3_column_int(stmt, 0);
+        }
+        const KryneEngine::u32 assetId = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+
+        IAssetPipeline* pipeline = FindPipeline(_asset);
+        if (pipeline == nullptr)
+        {
+            // No pipeline for the asset file, clean up all related cooked files, if there are any.
+
+            snprintf(sql, sizeof(sql), "SELECT path FROM cookedAssets WHERE sourceId = %d", assetId);
+            KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+            while (sqlite3_step(stmt) == SQLITE_ROW)
+            {
+                std::filesystem::path cookedOutputPath {
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0) };
+                if (std::filesystem::exists(cookedOutputPath))
+                {
+                    std::filesystem::remove(cookedOutputPath);
+                }
+            }
             sqlite3_finalize(stmt);
 
+            snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", assetId);
+            KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+            return;
+        }
+
+        const auto assetWriteTime = std::filesystem::last_write_time(_asset);
+
+        snprintf(sql, sizeof(sql), "SELECT id FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        KE_VERIFY(sqlite3_step(stmt) == SQLITE_ROW);
+        const KryneEngine::u32 pipelineId = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+
+        snprintf(
+            sql,
+            sizeof(sql),
+            "SELECT path, pipeline, pipelineVersion, writeDate FROM cookedAssets WHERE sourceId = %d",
+            assetId);
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        bool upToDate = false, mismatchedPipelineFiles = false;
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            upToDate = true;
+            do
+            {
+                std::filesystem::path cookedOutputPath {
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0)
+                };
+
+                if (pipelineId != sqlite3_column_int(stmt, 1))
+                {
+                    mismatchedPipelineFiles = true;
+                    upToDate = false;
+
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Verbose, kLogCategory,
+                        "Input asset '%s' was cooked with another pipline, will recook",
+                        std::filesystem::relative(_asset, parent).c_str());
+
+                    if (std::filesystem::exists(cookedOutputPath))
+                        std::filesystem::remove(cookedOutputPath);
+                    continue;
+                }
+
+                const KryneEngine::u64 pipelineVersion = sqlite3_column_int64(stmt, 2);
+                const KryneEngine::u64 cookedAssetExpectedWriteTime = sqlite3_column_int64(stmt, 3);
+                if (pipelineVersion != pipeline->GetVersion())
+                {
+                    upToDate = false;
+
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Verbose, kLogCategory,
+                        "Input asset '%s' was cooked with a previous pipeline version, will recook",
+                        std::filesystem::relative(_asset, parent).c_str());
+
+                    if (std::filesystem::exists(cookedOutputPath))
+                        std::filesystem::remove(cookedOutputPath);
+                }
+                else if (!std::filesystem::exists(cookedOutputPath))
+                {
+                    upToDate = false;
+
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Verbose, kLogCategory,
+                        "Output asset '%s' is missing, will recook",
+                        std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
+                }
+                else if (std::filesystem::last_write_time(cookedOutputPath) < assetWriteTime)
+                {
+                    upToDate = false;
+
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Verbose, kLogCategory,
+                        "Input asset '%s' modified after last write date of output '%s', will recook",
+                        std::filesystem::relative(_asset, parent).c_str(),
+                        std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
+                }
+                else if (std::filesystem::last_write_time(cookedOutputPath).time_since_epoch().count() != cookedAssetExpectedWriteTime)
+                {
+                    upToDate = false;
+
+                    Logger::GetInstance()->LogFormatted(
+                        LogSeverity::Verbose, kLogCategory,
+                        "Output asset '%s' write date mismatch, probably modified, will recook",
+                        std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
+                }
+            }
+            while (sqlite3_step(stmt) == SQLITE_ROW);
+        }
+        sqlite3_finalize(stmt);
+
+        if (mismatchedPipelineFiles)
+        {
             snprintf(
                 sql,
                 sizeof(sql),
-                "SELECT path, pipeline, pipelineVersion, writeDate FROM cookedAssets WHERE sourceId = %d",
-                assetId);
-            KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
-            bool upToDate = false, mismatchedPipelineFiles = false;
-            if (sqlite3_step(stmt) == SQLITE_ROW)
+                "DELETE FROM cookedAssets WHERE sourceId = %d AND pipeline != %d",
+                assetId,
+                pipelineId);
+            KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+        }
+
+        if (!upToDate)
+        {
+            auto lock = std::unique_lock(m_queueMutex);
+            m_updateQueue.emplace(QueueEntry {
+                .m_asset = _asset,
+                .m_assetDirectory = parent,
+                .m_pipeline = pipeline,
+                .m_assetId = assetId,
+                .m_pipelineId = pipelineId,
+            });
+            m_queueCondition.notify_all();
+        }
+    }
+
+    void AssetCooker::ProbeOutputAsset(const std::filesystem::path& _asset)
+    {
+        {
+            std::unique_lock lock { m_queueMutex };
+            if (m_cookingAssets.find(_asset) != m_cookingAssets.end())
             {
-                upToDate = true;
-                do
-                {
-                    std::filesystem::path cookedOutputPath {
-                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
-                        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0)
-                    };
-
-                    if (pipelineId != sqlite3_column_int(stmt, 1))
-                    {
-                        mismatchedPipelineFiles = true;
-                        upToDate = false;
-
-                        Logger::GetInstance()->LogFormatted(
-                            LogSeverity::Verbose, kLogCategory,
-                            "Input asset '%s' was cooked with another pipline, will recook",
-                            std::filesystem::relative(path, _path).c_str());
-
-                        if (std::filesystem::exists(cookedOutputPath))
-                            std::filesystem::remove(cookedOutputPath);
-                        continue;
-                    }
-
-                    const KryneEngine::u64 pipelineVersion = sqlite3_column_int64(stmt, 2);
-                    const KryneEngine::u64 cookedAssetExpectedWriteTime = sqlite3_column_int64(stmt, 3);
-                    if (pipelineVersion != pipeline->GetVersion())
-                    {
-                        upToDate = false;
-
-                        Logger::GetInstance()->LogFormatted(
-                            LogSeverity::Verbose, kLogCategory,
-                            "Input asset '%s' was cooked with a previous pipeline version, will recook",
-                            std::filesystem::relative(path, _path).c_str());
-
-                        if (std::filesystem::exists(cookedOutputPath))
-                            std::filesystem::remove(cookedOutputPath);
-                    }
-                    else if (!std::filesystem::exists(cookedOutputPath))
-                    {
-                        upToDate = false;
-
-                        Logger::GetInstance()->LogFormatted(
-                            LogSeverity::Verbose, kLogCategory,
-                            "Output asset '%s' is missing, will recook",
-                            std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
-                    }
-                    else if (std::filesystem::last_write_time(cookedOutputPath) < assetWriteTime)
-                    {
-                        upToDate = false;
-
-                        Logger::GetInstance()->LogFormatted(
-                            LogSeverity::Verbose, kLogCategory,
-                            "Input asset '%s' modified after last write date of output '%s', will recook",
-                            std::filesystem::relative(path, _path).c_str(),
-                            std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
-                    }
-                    else if (std::filesystem::last_write_time(cookedOutputPath).time_since_epoch().count() != cookedAssetExpectedWriteTime)
-                    {
-                        upToDate = false;
-
-                        Logger::GetInstance()->LogFormatted(
-                            LogSeverity::Verbose, kLogCategory,
-                            "Output asset '%s' write date mismatch, probably modified, will recook",
-                            std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
-                    }
-                }
-                while (sqlite3_step(stmt) == SQLITE_ROW);
-            }
-            sqlite3_finalize(stmt);
-
-            if (mismatchedPipelineFiles)
-            {
-                snprintf(
-                    sql,
-                    sizeof(sql),
-                    "DELETE FROM cookedAssets WHERE sourceId = %d AND pipeline != %d",
-                    assetId,
-                    pipelineId);
-                KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
-            }
-
-            if (!upToDate)
-            {
-                auto lock = std::unique_lock(m_queueMutex);
-                m_updateQueue.emplace(QueueEntry {
-                    .m_asset = path,
-                    .m_assetDirectory = _path,
-                    .m_pipeline = pipeline,
-                    .m_assetId = assetId,
-                    .m_pipelineId = pipelineId,
-                });
-                m_queueCondition.notify_all();
+                return;
             }
         }
+
+        char sql[2048];
+        sqlite3_stmt* stmt;
+        snprintf(sql, sizeof(sql),
+            "SELECT assets.path, cookedAssets.writeDate, assets.id, cookedAssets.pipeline FROM cookedAssets JOIN assets ON assets.id = cookedAssets.sourceId WHERE cookedAssets.path = '%s'",
+            _asset.c_str());
+
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            const KryneEngine::u64 writeDate = sqlite3_column_int64(stmt, 1);
+            if (!std::filesystem::exists(_asset)
+                || writeDate != std::filesystem::last_write_time(_asset).time_since_epoch().count())
+            {
+                const std::filesystem::path input {
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                    reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0)
+                };
+
+                for (const auto& directory: m_rawAssetDirectories)
+                {
+                    if (std::filesystem::relative(input, directory).begin()->string() == "..")
+                        continue;
+
+                    IAssetPipeline* pipeline = FindPipeline(input);
+                    KE_ASSERT(pipeline != nullptr);
+
+                    std::unique_lock lock { m_queueMutex };
+                    m_updateQueue.emplace(QueueEntry {
+                        .m_asset = input,
+                        .m_assetDirectory = directory,
+                        .m_pipeline = pipeline,
+                        .m_assetId = static_cast<KryneEngine::u32>(sqlite3_column_int(stmt, 2)),
+                        .m_pipelineId = static_cast<KryneEngine::u32>(sqlite3_column_int(stmt, 3)),
+                    });
+                    m_queueCondition.notify_all();
+                }
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    void AssetCooker::OnInputAssetRenamed(
+        const std::filesystem::path& _oldPath,
+        const std::filesystem::path& _newPath) const
+    {
+        char sql[2048];
+        snprintf(sql, sizeof(sql), "UPDATE assets SET path = '%s' WHERE path = '%s'", _newPath.c_str(), _oldPath.c_str());
+        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+    }
+
+    void AssetCooker::OnInputAssetDeleted(const std::filesystem::path& _asset) const
+    {
+        KE_ASSERT(!std::filesystem::exists(_asset));
+
+        char sql[2048];
+        sqlite3_stmt* stmt;
+
+        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.c_str());
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+
+        if (sqlite3_step(stmt) != SQLITE_ROW)
+        {
+            sqlite3_finalize(stmt);
+            return;
+        }
+        const KryneEngine::u32 assetId = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+
+        snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", assetId);
+        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+        snprintf(sql, sizeof(sql), "DELETE FROM assets WHERE id = %d", assetId);
+        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+    }
+
+    IAssetPipeline* AssetCooker::FindPipeline(const std::filesystem::path& _asset)
+    {
+        eastl::string filename = _asset.filename().c_str();
+        size_t pos = filename.find_first_of('.');
+        while (pos != eastl::string::npos)
+        {
+            const eastl::string extension = filename.substr(pos);
+            const auto pipelineIt = m_pipelineMap.Find(KryneEngine::StringHash(extension));
+            if (pipelineIt != m_pipelineMap.end())
+            {
+                return pipelineIt->second;
+            }
+            pos = filename.find_first_of('.', pos + 1);
+        }
+        return nullptr;
     }
 }
