@@ -51,6 +51,7 @@ target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImG
 
 set_target_properties(ProjectManagerLib PROPERTIES FOLDER "EngineTools")
 
+add_subdirectory(Modules/FontAssetPipeline)
 
 if (KE_TOOLS_PM_STANDALONE)
     add_executable(ProjectManager Standalone/ProjectManager.cpp)
