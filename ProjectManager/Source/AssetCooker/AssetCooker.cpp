@@ -10,6 +10,7 @@
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.inl>
 
 #include "AssetCooker/DirectoryMonitor.hpp"
+#include "EASTL/fixed_vector.h"
 #include "KryneEngine/Core/Profiling/TracyHeader.hpp"
 #include "ProjectManager/AssetCooker/IAssetPipeline.hpp"
 #include "ProjectManager/Database/Database.hpp"
@@ -195,6 +196,31 @@ namespace ProjectManager
         for (auto i = 0; i < m_workThreads.Size(); i++)
             m_workThreads.Init(i, [this] (const KryneEngine::u32 _index) { this->ThreadMain(_index); }, i);
         m_cookingAssetPerThread.resize(m_workThreads.Size(), {});
+    }
+
+    void* AssetCooker::RequestSupport(void* _entry, eastl::function<void()> _workFunction)
+    {
+        const std::unique_lock lock { m_queueMutex };
+        auto* request = new SupportWork { static_cast<QueueEntry*>(_entry), eastl::move(_workFunction) };
+        m_supportWorkRequests.emplace_back(request);
+        m_queueCondition.notify_all();
+        return request;
+    }
+
+    void AssetCooker::FinalizeSupportRequest(void* _request)
+    {
+        std::unique_lock lock { m_queueMutex };
+        auto* request = static_cast<SupportWork*>(_request);
+
+        auto it = eastl::find(m_supportWorkRequests.begin(), m_supportWorkRequests.end(), request);
+        KE_ASSERT(it != m_supportWorkRequests.end());
+        m_supportWorkRequests.erase(it);
+
+        while (request->m_supporterCount.load(std::memory_order::acquire) > 0)
+        {
+            request->m_supporterCondition.wait(lock);
+        }
+        delete request;
     }
 
     void AssetCooker::ProbeDirectory(const std::filesystem::path& _path)
@@ -491,13 +517,54 @@ namespace ProjectManager
         char sql[2048];
         sqlite3_stmt* stmt;
 
+        eastl::fixed_vector<SupportWork*, 16> completedSupportWorkRequests;
+
         while (!m_stopWork)
         {
             {
                 auto queueLock = std::unique_lock(m_queueMutex);
-                m_queueCondition.wait(queueLock, [this] { return !m_updateQueue.empty() || m_stopWork; });
+                m_queueCondition.wait(queueLock, [this]
+                {
+                    return !m_supportWorkRequests.empty() || !m_updateQueue.empty() || m_stopWork;
+                });
                 if (m_stopWork)
                     break;
+
+                if (!m_supportWorkRequests.empty())
+                {
+                    SupportWork* work = nullptr;
+
+                    for (auto i = 0; i < m_supportWorkRequests.size(); ++i)
+                    {
+                        // Clean up completed work requests
+                        while (completedSupportWorkRequests.size() > i && m_supportWorkRequests[i] != completedSupportWorkRequests[i])
+                            completedSupportWorkRequests.erase(completedSupportWorkRequests.begin() + i);
+
+                        if (completedSupportWorkRequests.size() > i && m_supportWorkRequests[i] == completedSupportWorkRequests[i])
+                            continue;
+                        work = m_supportWorkRequests[i];
+                        break;
+                    }
+
+                    if (work)
+                    {
+                        work->m_supporterCount.fetch_add(1, std::memory_order::acq_rel);
+                        queueLock.unlock();
+
+                        m_cookingAssetPerThread[_index] = std::filesystem::relative(work->m_entry->m_asset, work->m_entry->m_assetDirectory);
+                        work->m_workFunction();
+                        m_cookingAssetPerThread[_index] = std::filesystem::path();
+                        completedSupportWorkRequests.push_back(work);
+
+                        queueLock.lock();
+                        work->m_supporterCount.fetch_sub(1, std::memory_order::acq_rel);
+                        work->m_supporterCondition.notify_all();
+                        continue;
+                    }
+
+                    if (m_updateQueue.empty())
+                        continue;
+                }
 
                 entry = m_updateQueue.front();
                 m_updateQueue.pop();
@@ -567,6 +634,8 @@ namespace ProjectManager
                 if (!upToDate)
                 {
                     const IAssetPipeline::CookResult result = entry.m_pipeline->CookAsset(
+                        this,
+                        &entry,
                        relativePath.c_str(),
                        entry.m_assetDirectory.c_str(),
                        m_outputDirectory.c_str());

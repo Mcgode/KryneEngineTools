@@ -42,6 +42,9 @@ namespace ProjectManager
 
         static constexpr KryneEngine::u64 kLogCategory = Logger::MakeCategoryId("AssetCooker");
 
+        void* RequestSupport(void* _entry, eastl::function<void()> _workFunction);
+        void FinalizeSupportRequest(void* _request);
+
     private:
         Database* m_database;
         KryneEngine::LightweightMutex m_mutex;
@@ -62,12 +65,22 @@ namespace ProjectManager
             KryneEngine::u32 m_pipelineId = 0;
             bool m_forceCook = false;
         };
+
+        struct SupportWork
+        {
+            QueueEntry* m_entry;
+            eastl::function<void()> m_workFunction;
+            std::atomic<int> m_supporterCount = 0;
+            std::condition_variable m_supporterCondition;
+        };
+
         std::mutex m_queueMutex;
         std::condition_variable m_queueCondition;
         eastl::queue<QueueEntry> m_updateQueue;
         eastl::vector_map<std::filesystem::path, KryneEngine::u32> m_cookingAssets;
-        eastl::vector<std::filesystem::path> m_cookingAssetPerThread;
+        eastl::vector<SupportWork*> m_supportWorkRequests;
 
+        eastl::vector<std::filesystem::path> m_cookingAssetPerThread;
         KryneEngine::SpinLock m_cookedAssetsLock;
         eastl::vector<std::filesystem::path> m_cookedAssets;
 

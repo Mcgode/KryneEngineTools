@@ -11,6 +11,8 @@
 
 namespace ProjectManager
 {
+    class AssetCooker;
+
     class IAssetPipeline
     {
     public:
@@ -29,6 +31,8 @@ namespace ProjectManager
         };
 
         [[nodiscard]] virtual CookResult CookAsset(
+            AssetCooker* _assetCooker,
+            void* _entry,
             eastl::string_view _assetRelativePath,
             eastl::string_view _assetDirectory,
             eastl::string_view _outputDir) = 0;
