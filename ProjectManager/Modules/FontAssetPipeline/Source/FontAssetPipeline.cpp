@@ -120,13 +120,13 @@ namespace ProjectManager
 
                     Freetype::LoadOutline(face, points, tags);
 
-                    glyphInfo.m_outlineTagCount = points.size() - glyphInfo.m_outlineFirstTag;
+                    glyphInfo.m_outlineTagCount = tags.size() - glyphInfo.m_outlineFirstTag;
                 }
 
                 unicodeCodepoint = FT_Get_Next_Char(face, unicodeCodepoint, &glyphIndex);
             }
         }
-        eastl::sort(glyphs.begin(), glyphs.end(), [](const auto& _a, const auto& _b) { return _a.m_glyph.m_codePoint < _b.m_glyph.m_codePoint; });
+        // eastl::sort(glyphs.begin(), glyphs.end(), [](const auto& _a, const auto& _b) { return _a.m_glyph.m_codePoint < _b.m_glyph.m_codePoint; });
 
         const eastl::span file = m_compress
             ? PreBakedFontFile::BakeCompressed(m_renderInfo, {}, glyphs, points, tags, {})
