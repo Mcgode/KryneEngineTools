@@ -81,5 +81,7 @@ namespace ProjectManager
         void OnInputAssetDeleted(const std::filesystem::path& _asset) const;
 
         IAssetPipeline* FindPipeline(const std::filesystem::path& _asset);
+
+        void ThreadMain();
     };
 }
