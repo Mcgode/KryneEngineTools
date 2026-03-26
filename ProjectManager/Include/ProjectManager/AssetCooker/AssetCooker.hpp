@@ -26,6 +26,7 @@ namespace ProjectManager
     class AssetCooker
     {
         friend DirectoryMonitor;
+        friend class AssetCookerWindow;
 
     public:
         explicit AssetCooker(Database* _database);
@@ -65,6 +66,10 @@ namespace ProjectManager
         std::condition_variable m_queueCondition;
         eastl::queue<QueueEntry> m_updateQueue;
         eastl::vector_map<std::filesystem::path, KryneEngine::u32> m_cookingAssets;
+        eastl::vector<std::filesystem::path> m_cookingAssetPerThread;
+
+        KryneEngine::SpinLock m_cookedAssetsLock;
+        eastl::vector<std::filesystem::path> m_cookedAssets;
 
         KryneEngine::DynamicArray<std::thread> m_workThreads;
         volatile bool m_stopWork = false;
@@ -82,6 +87,6 @@ namespace ProjectManager
 
         IAssetPipeline* FindPipeline(const std::filesystem::path& _asset);
 
-        void ThreadMain();
+        void ThreadMain(KryneEngine::u32 _index);
     };
 }

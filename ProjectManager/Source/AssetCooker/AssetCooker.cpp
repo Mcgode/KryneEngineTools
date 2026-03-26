@@ -192,7 +192,9 @@ namespace ProjectManager
                 static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000.f);
         });
 
-        m_workThreads.InitAll([this] { this->ThreadMain(); });
+        for (auto i = 0; i < m_workThreads.Size(); i++)
+            m_workThreads.Init(i, [this] (const KryneEngine::u32 _index) { this->ThreadMain(_index); }, i);
+        m_cookingAssetPerThread.resize(m_workThreads.Size(), {});
     }
 
     void AssetCooker::ProbeDirectory(const std::filesystem::path& _path)
@@ -483,7 +485,7 @@ namespace ProjectManager
         return nullptr;
     }
 
-    void AssetCooker::ThreadMain()
+    void AssetCooker::ThreadMain(const KryneEngine::u32 _index)
     {
         QueueEntry entry;
         char sql[2048];
@@ -557,6 +559,8 @@ namespace ProjectManager
             const std::filesystem::path relativePath = entry.m_asset.lexically_relative(entry.m_assetDirectory);
             KE_ZoneScopedF("Processing '%s'", relativePath.c_str());
 
+            m_cookingAssetPerThread[_index] = relativePath;
+
             bool shouldRecook = false;
             do
             {
@@ -616,6 +620,10 @@ namespace ProjectManager
                 }
             }
             while (shouldRecook);
+
+            m_cookingAssetPerThread[_index] = std::filesystem::path {};
+            const auto cookedLock = m_cookedAssetsLock.AutoLock();
+            m_cookedAssets.push_back(relativePath);
         }
     }
 }
