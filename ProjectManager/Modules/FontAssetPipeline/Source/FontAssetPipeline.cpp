@@ -214,6 +214,8 @@ namespace ProjectManager
             AllocatorInstance().deallocate(glyph.m_msdfBitmap.data(), glyph.m_msdfBitmap.size());
         }
 
+        FT_Done_Face(face);
+
         return {
             .success = true,
             .m_resultingFiles = { output },
