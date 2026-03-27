@@ -164,12 +164,13 @@ namespace ProjectManager
 
                     KE_ASSERT(shape.validate());
 
+                    const float fontSize = m_bakeFontSize;
                     const GlyphLayoutMetrics metrics {
-                        .m_advanceX = glyphInfo.m_glyph.m_advanceX,
-                        .m_bearingX = glyphInfo.m_glyph.m_bearingX,
-                        .m_width = glyphInfo.m_glyph.m_width,
-                        .m_bearingY = glyphInfo.m_glyph.m_bearingY,
-                        .m_height = glyphInfo.m_glyph.m_height,
+                        .m_advanceX = glyphInfo.m_glyph.m_advanceX * fontSize,
+                        .m_bearingX = glyphInfo.m_glyph.m_bearingX * fontSize,
+                        .m_width = glyphInfo.m_glyph.m_width * fontSize,
+                        .m_bearingY = glyphInfo.m_glyph.m_bearingY * fontSize,
+                        .m_height = glyphInfo.m_glyph.m_height * fontSize,
                     };
                     const GlyphMsdfBitmap msdfBitmap = eastl::move(MsdfGen::GenerateMsdf(
                         shape,
