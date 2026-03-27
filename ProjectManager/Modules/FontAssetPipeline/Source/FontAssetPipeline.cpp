@@ -6,9 +6,14 @@
 
 #include "ProjectManager/FontAssetPipeline/FontAssetPipeline.hpp"
 
+#include <algorithm>
+#include <EASTL/sort.h>
 #include <KryneEngine/Modules/TextRendering/Utils/FreetypeFunctionHelpers.hpp>
+#include <KryneEngine/Modules/TextRendering/Utils/MsdfGenFunctionHelpers.hpp>
+#include <moodycamel/concurrentqueue.h>
 
-#include "EASTL/sort.h"
+#include "KryneEngine/Core/Profiling/TracyHeader.hpp"
+#include "KryneEngine/Modules/TextRendering/MsdfAtlasManager.hpp"
 #include "ProjectManager/AssetCooker/AssetCooker.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
@@ -31,6 +36,8 @@ namespace ProjectManager
     }
 
     IAssetPipeline::CookResult FontAssetPipeline::CookAsset(
+        AssetCooker* _cooker,
+        void* _entry,
         const eastl::string_view _assetRelativePath,
         const eastl::string_view _assetDirectory,
         const eastl::string_view _outputDir)
@@ -113,7 +120,7 @@ namespace ProjectManager
                     .m_height = static_cast<float>(face->glyph->metrics.height) * scale,
                 };
 
-                if (BitUtils::EnumHasAny(m_renderInfo, BakedRenderInfo::Outlines))
+                if (BitUtils::EnumHasAny(m_renderInfo, BakedRenderInfo::Outlines | BakedRenderInfo::Msdf))
                 {
                     glyphInfo.m_outlineStartPoint = points.size();
                     glyphInfo.m_outlineFirstTag = tags.size();
@@ -126,7 +133,64 @@ namespace ProjectManager
                 unicodeCodepoint = FT_Get_Next_Char(face, unicodeCodepoint, &glyphIndex);
             }
         }
-        // eastl::sort(glyphs.begin(), glyphs.end(), [](const auto& _a, const auto& _b) { return _a.m_glyph.m_codePoint < _b.m_glyph.m_codePoint; });
+
+        if (BitUtils::EnumHasAny(m_renderInfo, BakedRenderInfo::Msdf))
+        {
+            moodycamel::ConcurrentQueue<u32> glyphBitmapsToCook;
+            for (u32 i = 0; i < glyphs.size(); ++i)
+            {
+                glyphBitmapsToCook.enqueue(i);
+            }
+
+            const auto workFunction = [&glyphBitmapsToCook, &glyphs, &points, &tags, this]
+            {
+                u32 glyphIndex;
+                while (glyphBitmapsToCook.try_dequeue(glyphIndex))
+                {
+                    auto& glyphInfo = glyphs[glyphIndex];
+
+                    if (glyphInfo.m_outlineTagCount == 0)
+                        continue;
+
+                    KE_ZoneScopedF("Generate MSDF for U+%x", glyphInfo.m_glyph.m_codePoint);
+
+                    msdfgen::Shape shape;
+                    MsdfGen::LoadShape(shape, {
+                        .m_points = points.data() + glyphInfo.m_outlineStartPoint,
+                        .m_tags = {
+                            tags.begin() + glyphInfo.m_outlineFirstTag,
+                            tags.begin() + glyphInfo.m_outlineFirstTag + glyphInfo.m_outlineTagCount}
+                    });
+
+                    KE_ASSERT(shape.validate());
+
+                    const GlyphLayoutMetrics metrics {
+                        .m_advanceX = glyphInfo.m_glyph.m_advanceX,
+                        .m_bearingX = glyphInfo.m_glyph.m_bearingX,
+                        .m_width = glyphInfo.m_glyph.m_width,
+                        .m_bearingY = glyphInfo.m_glyph.m_bearingY,
+                        .m_height = glyphInfo.m_glyph.m_height,
+                    };
+                    const GlyphMsdfBitmap msdfBitmap = eastl::move(MsdfGen::GenerateMsdf(
+                        shape,
+                        metrics,
+                        m_bakeFontSize,
+                        MsdfAtlasManager::GetPxRange(m_bakeFontSize),
+                        {}));
+
+                    glyphInfo.m_msdfBitmap = msdfBitmap.m_bitmap;
+                    glyphInfo.m_msdfBakedFontSize = m_bakeFontSize;
+                    glyphInfo.m_msdfHeight = msdfBitmap.m_height;
+                    glyphInfo.m_msdfWidth = msdfBitmap.m_width;
+                }
+            };
+
+            void* request = _cooker->RequestSupport(_entry, workFunction);
+            workFunction();
+            _cooker->FinalizeSupportRequest(request);
+        }
+
+        eastl::sort(glyphs.begin(), glyphs.end(), [](const auto& _a, const auto& _b) { return _a.m_glyph.m_codePoint < _b.m_glyph.m_codePoint; });
 
         const eastl::span file = m_compress
             ? PreBakedFontFile::BakeCompressed(m_renderInfo, {}, glyphs, points, tags, {})
@@ -143,6 +207,11 @@ namespace ProjectManager
         outputFileStream.close();
 
         AllocatorInstance().deallocate(file.data(), file.size());
+
+        for (auto& glyph: glyphs)
+        {
+            AllocatorInstance().deallocate(glyph.m_msdfBitmap.data(), glyph.m_msdfBitmap.size());
+        }
 
         return {
             .success = true,

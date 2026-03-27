@@ -26,6 +26,8 @@ namespace ProjectManager
         }
 
         [[nodiscard]] CookResult CookAsset(
+            AssetCooker* _cooker,
+            void* _entry,
             eastl::string_view _assetRelativePath,
             eastl::string_view _assetDirectory,
             eastl::string_view _outputDir) override;
@@ -45,14 +47,17 @@ namespace ProjectManager
 
         void SetRenderInfo(const BakedRenderInfo _renderInfo) { m_renderInfo = _renderInfo; }
         void SetCompress(const bool _compress) { m_compress = _compress; }
+        void SetFontSize(const KryneEngine::u16 _fontSize) { m_bakeFontSize = _fontSize; }
 
         [[nodiscard]] BakedRenderInfo GetRenderInfo() const { return m_renderInfo; }
         [[nodiscard]] bool IsCompress() const { return m_compress; }
+        [[nodiscard]] KryneEngine::u16 GetFontSize() const { return m_bakeFontSize; }
 
 
     private:
         FT_LibraryRec_* m_ftLibrary = nullptr;
         BakedRenderInfo m_renderInfo = static_cast<BakedRenderInfo>(0);
+        KryneEngine::u16 m_bakeFontSize = 48;
         bool m_compress = false;
     };
 }
