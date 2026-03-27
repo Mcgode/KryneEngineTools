@@ -191,11 +191,17 @@ namespace ProjectManager
             _cooker->FinalizeSupportRequest(request);
         }
 
+        const PreBakedFontFile::FontMetrics fontMetrics {
+            .m_ascender = static_cast<float>(face->ascender) / static_cast<float>(face->units_per_EM),
+            .m_descender = static_cast<float>(face->descender) / static_cast<float>(face->units_per_EM),
+            .m_lineHeight = static_cast<float>(face->height) / static_cast<float>(face->units_per_EM),
+        };
+
         eastl::sort(glyphs.begin(), glyphs.end(), [](const auto& _a, const auto& _b) { return _a.m_glyph.m_codePoint < _b.m_glyph.m_codePoint; });
 
         const eastl::span file = m_compress
-            ? PreBakedFontFile::BakeCompressed(m_renderInfo, {}, glyphs, points, tags, {})
-            : PreBakedFontFile::Bake(m_renderInfo, {}, glyphs, points, tags, {});
+            ? PreBakedFontFile::BakeCompressed(m_renderInfo, fontMetrics, glyphs, points, tags, {})
+            : PreBakedFontFile::Bake(m_renderInfo, fontMetrics, glyphs, points, tags, {});
 
         if (std::filesystem::exists(output))
             std::filesystem::remove(output);
