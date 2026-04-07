@@ -128,9 +128,6 @@ namespace ProjectManager
         m_running = true;
         m_directoryMonitor = eastl::make_unique<DirectoryMonitor>(this);
 
-        const auto timepoint = std::filesystem::file_time_type::clock::now();
-        const KryneEngine::u64 timepointMs = std::chrono::duration_cast<std::chrono::milliseconds>(timepoint.time_since_epoch()).count();
-
         {
             char sql[2048];
             sqlite3_stmt* stmt;
