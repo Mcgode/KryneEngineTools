@@ -120,6 +120,13 @@ namespace ProjectManager
             m_window.get(),
             m_renderPasses[0],
             m_allocator);
+
+        {
+            char path[1024];
+            snprintf(path, sizeof(path), "%s/ProjectManager.ini", KryneEngine::Platform::GetDefaultConfigDirectory(m_applicationInfo.m_applicationName).c_str());
+            ImGui::GetIO().IniFilename = path;
+        }
+
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
         ImFont* baseFont = ImGui::GetIO().Fonts->AddFontDefaultVector();
