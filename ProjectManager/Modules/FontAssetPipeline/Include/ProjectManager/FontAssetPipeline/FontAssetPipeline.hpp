@@ -43,6 +43,11 @@ namespace ProjectManager
             return extensions;
         }
 
+        [[nodiscard]] bool CanCompressOutputFile(const std::filesystem::path&) const override
+        {
+            return false;
+        }
+
         using BakedRenderInfo = KryneEngine::Modules::TextRendering::PreBakedFontFile::BakedRenderInfo;
 
         void SetRenderInfo(const BakedRenderInfo _renderInfo) { m_renderInfo = _renderInfo; }

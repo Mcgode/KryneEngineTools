@@ -24,6 +24,8 @@ namespace ProjectManager
 
         [[nodiscard]] virtual eastl::span<const char*> GetHandledAssetFileExtensions() const = 0;
 
+        [[nodiscard]] virtual bool CanCompressOutputFile(const std::filesystem::path& _outputFile) const = 0;
+
         struct CookResult
         {
             bool success;
