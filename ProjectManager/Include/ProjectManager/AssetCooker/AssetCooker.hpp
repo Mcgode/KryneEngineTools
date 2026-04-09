@@ -22,9 +22,11 @@ namespace ProjectManager
     class Database;
     class DirectoryMonitor;
     class IAssetPipeline;
+    class ArchivePipeline;
 
     class AssetCooker
     {
+        friend ArchivePipeline;
         friend DirectoryMonitor;
         friend class AssetCookerWindow;
 
@@ -45,10 +47,14 @@ namespace ProjectManager
         void* RequestSupport(void* _entry, eastl::function<void()> _workFunction);
         void FinalizeSupportRequest(void* _request);
 
+        [[nodiscard]] bool ShouldCancelCook(void* _entry);
+
     private:
         Database* m_database;
         KryneEngine::LightweightMutex m_mutex;
         eastl::vector<IAssetPipeline*> m_pipelines;
+        eastl::vector_map<KryneEngine::u32, IAssetPipeline*> m_pipelineIds;
+        eastl::unique_ptr<ArchivePipeline> m_archiver;
         std::filesystem::path m_outputDirectory;
         eastl::vector<std::filesystem::path> m_rawAssetDirectories;
         bool m_running = false;
@@ -64,6 +70,17 @@ namespace ProjectManager
             KryneEngine::u32 m_assetId = 0;
             KryneEngine::u32 m_pipelineId = 0;
             bool m_forceCook = false;
+            bool m_shouldCancel = false;
+
+            bool operator==(const QueueEntry& _other) const
+            {
+                return m_assetId == _other.m_assetId;
+            }
+
+            bool operator<(const QueueEntry& _other) const
+            {
+                return m_assetId < _other.m_assetId;
+            }
         };
 
         struct SupportWork
@@ -77,7 +94,9 @@ namespace ProjectManager
         std::mutex m_queueMutex;
         std::condition_variable m_queueCondition;
         eastl::queue<QueueEntry> m_updateQueue;
+        eastl::vector_set<QueueEntry> m_archiveQueue;
         eastl::vector_map<std::filesystem::path, KryneEngine::u32> m_cookingAssets;
+        eastl::vector_map<KryneEngine::u32, QueueEntry*> m_cookingArchives;
         eastl::vector<SupportWork*> m_supportWorkRequests;
 
         eastl::vector<std::filesystem::path> m_cookingAssetPerThread;
@@ -96,10 +115,12 @@ namespace ProjectManager
 
         void OnInputAssetRenamed(const std::filesystem::path& _oldPath, const std::filesystem::path& _newPath) const;
 
-        void OnInputAssetDeleted(const std::filesystem::path& _asset) const;
+        void OnInputAssetDeleted(const std::filesystem::path& _asset);
 
         IAssetPipeline* FindPipeline(const std::filesystem::path& _asset);
 
         void ThreadMain(KryneEngine::u32 _index);
+
+        void Enqueue(QueueEntry&& _entry);
     };
 }

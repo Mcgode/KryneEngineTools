@@ -9,9 +9,11 @@
 #include <KryneEngine/Core/Common/Assert.hpp>
 #include <KryneEngine/Core/Memory/Containers/FlatHashMap.inl>
 
+#include "AssetCooker/ArchivePipeline.hpp"
 #include "AssetCooker/DirectoryMonitor.hpp"
 #include "EASTL/fixed_vector.h"
 #include "KryneEngine/Core/Profiling/TracyHeader.hpp"
+#include "ProjectManager/Utils.hpp"
 #include "ProjectManager/AssetCooker/IAssetPipeline.hpp"
 #include "ProjectManager/Database/Database.hpp"
 
@@ -22,6 +24,9 @@ namespace ProjectManager
         , m_pipelineMap(KryneEngine::AllocatorInstance {})
     {
         Logger::GetInstance()->RegisterCategory(kLogCategory, "AssetCooker");
+
+        m_archiver = eastl::make_unique<ArchivePipeline>();
+        m_archiver->m_assetCooker = this;
 
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "Setting up AssetCooker database tables");
 
@@ -52,6 +57,8 @@ namespace ProjectManager
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
 
         m_workThreads.Resize(eastl::max(1u, std::thread::hardware_concurrency() - 1));
+
+        RegisterPipeline(m_archiver.get());
     }
 
     AssetCooker::~AssetCooker()
@@ -134,15 +141,17 @@ namespace ProjectManager
             for (IAssetPipeline* pipeline : m_pipelines)
             {
                 bool matchedVersions = false;
-                snprintf(sql, sizeof(sql), "SELECT version FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
+                snprintf(sql, sizeof(sql), "SELECT version, id FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
                 KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
                 if (sqlite3_step(stmt) == SQLITE_ROW)
                 {
-                    KE_ASSERT(sqlite3_column_count(stmt) == 1);
+                    KE_ASSERT(sqlite3_column_count(stmt) == 2);
                     KE_ASSERT(sqlite3_column_type(stmt, 0) == SQLITE_INTEGER);
                     const KryneEngine::u64 version = sqlite3_column_int64(stmt, 0);
                     if (pipeline->GetVersion() == version)
                     {
+                        const KryneEngine::u32 id = sqlite3_column_int(stmt, 1);
+                        m_pipelineIds.insert({ id, pipeline });
                         matchedVersions = true;
                     }
                     else
@@ -166,10 +175,14 @@ namespace ProjectManager
                 snprintf(
                     sql,
                     sizeof(sql),
-                    "INSERT INTO assetPipelines (name, version) VALUES ('%s', %llu)",
+                    "INSERT INTO assetPipelines (name, version) VALUES ('%s', %llu) RETURNING id",
                     pipeline->GetName().data(),
                     pipeline->GetVersion());
-                KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+                KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+                KE_VERIFY(sqlite3_step(stmt) == SQLITE_ROW);
+                const KryneEngine::u32 id = sqlite3_column_int(stmt, 0);
+                m_pipelineIds.insert({ id, pipeline });
+                sqlite3_finalize(stmt);
             }
         }
 
@@ -220,6 +233,12 @@ namespace ProjectManager
         delete request;
     }
 
+    bool AssetCooker::ShouldCancelCook(void* _entry)
+    {
+        std::unique_lock lock { m_queueMutex };
+        return static_cast<QueueEntry*>(_entry)->m_shouldCancel;
+    }
+
     void AssetCooker::ProbeDirectory(const std::filesystem::path& _path)
     {
 
@@ -246,8 +265,7 @@ namespace ProjectManager
         {
             for (const auto& directory: m_rawAssetDirectories)
             {
-                const auto relative = std::filesystem::relative(_asset, directory);
-                if (relative.begin()->string() != "..")
+                if (Utils::IsChildDirectory(_asset, directory))
                 {
                     parent = directory;
                     break;
@@ -394,15 +412,25 @@ namespace ProjectManager
 
         if (!upToDate)
         {
-            auto lock = std::unique_lock(m_queueMutex);
-            m_updateQueue.emplace(QueueEntry {
+            if (pipeline == m_archiver.get())
+            {
+                std::unique_lock lock { m_queueMutex };
+                m_archiver->m_pipelineId = pipelineId;
+                m_archiver->LoadArchive(
+                    parent,
+                    std::filesystem::relative(_asset, parent),
+                    m_outputDirectory,
+                    assetId,
+                    true);
+            }
+
+            Enqueue(QueueEntry {
                 .m_asset = _asset,
                 .m_assetDirectory = parent,
                 .m_pipeline = pipeline,
                 .m_assetId = assetId,
                 .m_pipelineId = pipelineId,
             });
-            m_queueCondition.notify_all();
         }
     }
 
@@ -442,15 +470,13 @@ namespace ProjectManager
                     IAssetPipeline* pipeline = FindPipeline(input);
                     KE_ASSERT(pipeline != nullptr);
 
-                    std::unique_lock lock { m_queueMutex };
-                    m_updateQueue.emplace(QueueEntry {
+                    Enqueue(QueueEntry {
                         .m_asset = input,
                         .m_assetDirectory = directory,
                         .m_pipeline = pipeline,
                         .m_assetId = static_cast<KryneEngine::u32>(sqlite3_column_int(stmt, 2)),
                         .m_pipelineId = static_cast<KryneEngine::u32>(sqlite3_column_int(stmt, 3)),
                     });
-                    m_queueCondition.notify_all();
                 }
             }
         }
@@ -466,7 +492,7 @@ namespace ProjectManager
         KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
     }
 
-    void AssetCooker::OnInputAssetDeleted(const std::filesystem::path& _asset) const
+    void AssetCooker::OnInputAssetDeleted(const std::filesystem::path& _asset)
     {
         KE_ASSERT(!std::filesystem::exists(_asset));
 
@@ -489,6 +515,12 @@ namespace ProjectManager
 
         snprintf(sql, sizeof(sql), "DELETE FROM assets WHERE id = %d", assetId);
         KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+        if (FindPipeline(_asset) == m_archiver.get())
+        {
+            const std::unique_lock lock(m_queueMutex);
+            m_archiver->m_archiveMap.erase(_asset);
+        }
     }
 
     IAssetPipeline* AssetCooker::FindPipeline(const std::filesystem::path& _asset)
@@ -522,7 +554,7 @@ namespace ProjectManager
                 auto queueLock = std::unique_lock(m_queueMutex);
                 m_queueCondition.wait(queueLock, [this]
                 {
-                    return !m_supportWorkRequests.empty() || !m_updateQueue.empty() || m_stopWork;
+                    return !m_supportWorkRequests.empty() || !m_updateQueue.empty() || !m_archiveQueue.empty() || m_stopWork;
                 });
                 if (m_stopWork)
                     break;
@@ -559,24 +591,49 @@ namespace ProjectManager
                         continue;
                     }
 
-                    if (m_updateQueue.empty())
+                    if (m_updateQueue.empty() && m_archiveQueue.empty())
                         continue;
                 }
 
-                entry = m_updateQueue.front();
-                m_updateQueue.pop();
-
-                // If the asset is already cooking, notify the cooker indirectly that the asset will need another
-                // re-cook.
-                // It will force the re-cook, which is not ideal if it was a double request for the same change, but
-                // these are expected to be rare.
-                const auto it = m_cookingAssets.find(entry.m_asset);
-                if (it != m_cookingAssets.end())
+                if (!m_updateQueue.empty())
                 {
-                    it->second++;
-                    continue;
+                    entry = m_updateQueue.front();
+                    m_updateQueue.pop();
+
+                    // If the asset is already cooking, notify the cooker indirectly that the asset will need another
+                    // re-cook.
+                    // It will force the re-cook, which is not ideal if it was a double request for the same change, but
+                    // these are expected to be rare.
+                    const auto it = m_cookingAssets.find(entry.m_asset);
+                    if (it != m_cookingAssets.end())
+                    {
+                        it->second++;
+                        continue;
+                    }
+                    m_cookingAssets.emplace(entry.m_asset, 0);
                 }
-                m_cookingAssets.emplace(entry.m_asset, 0);
+                else
+                {
+                    // Wait for all assets to be done cooking before launching archive work.
+                    if (!m_cookingAssets.empty())
+                        continue;
+
+                    entry = m_archiveQueue.back();
+                    m_archiveQueue.erase(m_archiveQueue.end() - 1);
+
+                    entry.m_forceCook = true;
+
+                    auto it = m_cookingArchives.find(entry.m_assetId);
+                    if (it != m_cookingArchives.end())
+                    {
+                        it->second->m_shouldCancel = true;
+                        it->second = &entry;
+                    }
+                    else
+                    {
+                        m_cookingArchives.emplace(entry.m_assetId, &entry);
+                    }
+                }
             }
 
             bool upToDate = false;
@@ -628,9 +685,10 @@ namespace ProjectManager
             bool shouldRecook = false;
             do
             {
+                IAssetPipeline::CookResult result {};
                 if (!upToDate)
                 {
-                    const IAssetPipeline::CookResult result = entry.m_pipeline->CookAsset(
+                    result = entry.m_pipeline->CookAsset(
                         this,
                         &entry,
                        relativePath.c_str(),
@@ -670,6 +728,14 @@ namespace ProjectManager
                 {
                     const std::unique_lock recookLock(m_queueMutex);
 
+                    if (entry.m_pipeline == m_archiver.get())
+                    {
+                        auto it = m_cookingArchives.find(entry.m_assetId);
+                        if (it->second == &entry)
+                            m_cookingArchives.erase(it);
+                        continue;
+                    }
+
                     auto it = m_cookingAssets.find(entry.m_asset);
 
                     if (it->second > 0)
@@ -682,6 +748,33 @@ namespace ProjectManager
                     {
                         m_cookingAssets.erase(it);
                         shouldRecook = false;
+
+                        if (result.success && !result.m_resultingFiles.empty())
+                        {
+                            for (auto& file: result.m_resultingFiles)
+                            {
+                                for (auto& pair: m_archiver->m_archiveMap)
+                                {
+                                    if (pair.second.BelongsTo(file))
+                                    {
+                                        m_archiveQueue.insert(QueueEntry {
+                                            .m_asset = pair.first,
+                                            .m_assetDirectory = pair.second.m_assetDirectory,
+                                            .m_pipeline = m_archiver.get(),
+                                            .m_assetId = pair.second.m_assetId,
+                                            .m_pipelineId = m_archiver->m_pipelineId,
+                                            .m_forceCook = true,
+                                        });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (m_cookingAssets.empty() && !m_archiveQueue.empty())
+                        {
+                            m_queueCondition.notify_all();
+                        }
                     }
                 }
             }
@@ -691,5 +784,15 @@ namespace ProjectManager
             const auto cookedLock = m_cookedAssetsLock.AutoLock();
             m_cookedAssets.push_back(relativePath);
         }
+    }
+
+    void AssetCooker::Enqueue(QueueEntry&& _entry)
+    {
+        std::unique_lock lock { m_queueMutex };
+        if (_entry.m_pipeline == m_archiver.get())
+            m_archiveQueue.insert(eastl::move(_entry));
+        else
+            m_updateQueue.emplace(eastl::move(_entry));
+        m_queueCondition.notify_all();
     }
 }

@@ -8,6 +8,7 @@
 
 #include <KryneEngine/Core/Memory/DynamicArray.hpp>
 
+#include "ProjectManager/Utils.hpp"
 #include "ProjectManager/AssetCooker/AssetCooker.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
@@ -107,6 +108,6 @@ namespace ProjectManager
 
     bool DirectoryMonitor::IsOutputFile(const std::filesystem::path& _path) const
     {
-        return std::filesystem::relative(_path, m_assetCooker->m_outputDirectory).begin()->string() != "..";
+        return Utils::IsChildDirectory(_path, m_assetCooker->m_outputDirectory);
     }
 } // ProjectManager

@@ -43,18 +43,21 @@ add_library(ProjectManagerLib STATIC
         Source/AssetCooker/DirectoryMonitor.hpp
         Source/Database/Database.cpp
         Include/ProjectManager/Database/Database.hpp
+        Source/AssetCooker/ArchivePipeline.cpp
+        Source/AssetCooker/ArchivePipeline.hpp
 )
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_include_directories(ProjectManagerLib PRIVATE Source)
-target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui sqlite)
+target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui KryneEngine_Modules_FileSystem sqlite yyjson)
 
 set_target_properties(ProjectManagerLib PROPERTIES FOLDER "EngineTools")
 
 add_subdirectory(Modules/FontAssetPipeline)
 
 if (KE_TOOLS_PM_STANDALONE)
-    add_executable(ProjectManager Standalone/ProjectManager.cpp)
+    add_executable(ProjectManager Standalone/ProjectManager.cpp
+            Include/ProjectManager/Utils.hpp)
 
     target_link_libraries(ProjectManager PUBLIC ProjectManagerLib)
     set_target_properties(ProjectManager PROPERTIES FOLDER "EngineTools")
