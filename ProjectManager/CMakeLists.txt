@@ -49,7 +49,7 @@ add_library(ProjectManagerLib STATIC
 
 target_include_directories(ProjectManagerLib PUBLIC Include)
 target_include_directories(ProjectManagerLib PRIVATE Source)
-target_link_libraries(ProjectManagerLib KryneEngine_Core KryneEngine_Modules_ImGui KryneEngine_Modules_FileSystem sqlite yyjson)
+target_link_libraries(ProjectManagerLib KryneEngine_Core_Link KryneEngine_Modules_ImGui KryneEngine_Modules_FileSystem sqlite yyjson)
 
 set_target_properties(ProjectManagerLib PROPERTIES FOLDER "EngineTools")
 
