@@ -55,7 +55,7 @@ namespace ProjectManager
 #elif defined(KE_GRAPHICS_API_DX12)
         m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::DirectX12_0;
 #elif defined(KE_GRAPHICS_API_MTL)
-        m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Metal_3;
+        m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Metal_4;
 #endif
 
         m_logWindow = eastl::make_unique<LogWindow>(_allocator);
