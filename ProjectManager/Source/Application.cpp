@@ -220,7 +220,7 @@ namespace ProjectManager
                 uiWindow->Render();
 
             m_imguiContext->PrepareToRenderFrame(graphicsContext, transfer);
-            m_imguiContext->RenderFrame(graphicsContext, graphics);
+            m_imguiContext->RenderFrame(graphicsContext, renderEncoder);
 
             graphicsContext->EndRenderPass(renderEncoder);
 
