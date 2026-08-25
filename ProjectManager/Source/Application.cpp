@@ -183,7 +183,7 @@ namespace ProjectManager
 
             const KryneEngine::RenderPassHandle renderPass = m_renderPasses[swapChainIdx];
 
-            graphicsContext->BeginRenderPass(graphics, renderPass);
+            const KryneEngine::RenderCommandEncoderHandle renderEncoder = graphicsContext->BeginRenderPass(graphics, renderPass);
 
             const ImGuiID dockSpaceId = ImGui::GetID("DockSpace");
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -222,7 +222,7 @@ namespace ProjectManager
             m_imguiContext->PrepareToRenderFrame(graphicsContext, transfer);
             m_imguiContext->RenderFrame(graphicsContext, graphics);
 
-            graphicsContext->EndRenderPass(graphics);
+            graphicsContext->EndRenderPass(renderEncoder);
 
             graphicsContext->EndGraphicsCommandList(transfer);
             graphicsContext->EndGraphicsCommandList(graphics);
