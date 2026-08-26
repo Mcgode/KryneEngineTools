@@ -181,10 +181,6 @@ namespace ProjectManager
             KryneEngine::CommandListHandle transfer = graphicsContext->BeginGraphicsCommandList();
             KryneEngine::CommandListHandle graphics = graphicsContext->BeginGraphicsCommandList();
 
-            const KryneEngine::RenderPassHandle renderPass = m_renderPasses[swapChainIdx];
-
-            const KryneEngine::RenderCommandEncoderHandle renderEncoder = graphicsContext->BeginRenderPass(graphics, renderPass);
-
             const ImGuiID dockSpaceId = ImGui::GetID("DockSpace");
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
@@ -219,10 +215,20 @@ namespace ProjectManager
             for (auto* uiWindow : m_uiWindows)
                 uiWindow->Render();
 
-            m_imguiContext->PrepareToRenderFrame(graphicsContext, transfer);
-            m_imguiContext->RenderFrame(graphicsContext, renderEncoder);
+            {
+                const KryneEngine::TransferCommandEncoderHandle transferEncoder = graphicsContext->BeginTransferPass(transfer);
+                m_imguiContext->PrepareToRenderFrame(graphicsContext, transferEncoder);
+                graphicsContext->EndTransferPass(transferEncoder);
+            }
 
-            graphicsContext->EndRenderPass(renderEncoder);
+            {
+                const KryneEngine::RenderPassHandle renderPass = m_renderPasses[swapChainIdx];
+
+                const KryneEngine::RenderCommandEncoderHandle renderEncoder = graphicsContext->BeginRenderPass(graphics, renderPass);
+                m_imguiContext->RenderFrame(graphicsContext, renderEncoder);
+
+                graphicsContext->EndRenderPass(renderEncoder);
+            }
 
             graphicsContext->EndGraphicsCommandList(transfer);
             graphicsContext->EndGraphicsCommandList(graphics);
