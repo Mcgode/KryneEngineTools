@@ -216,7 +216,7 @@ namespace ProjectManager
                 uiWindow->Render();
 
             {
-                const KryneEngine::TransferCommandEncoderHandle transferEncoder = graphicsContext->BeginTransferPass(transfer);
+                const KryneEngine::TransferCommandEncoderHandle transferEncoder = graphicsContext->BeginTransferPass(transfer, "Transfer pass");
                 m_imguiContext->PrepareToRenderFrame(graphicsContext, transferEncoder);
                 graphicsContext->EndTransferPass(transferEncoder);
             }
@@ -224,7 +224,7 @@ namespace ProjectManager
             {
                 const KryneEngine::RenderPassHandle renderPass = m_renderPasses[swapChainIdx];
 
-                const KryneEngine::RenderCommandEncoderHandle renderEncoder = graphicsContext->BeginRenderPass(graphics, renderPass);
+                const KryneEngine::RenderCommandEncoderHandle renderEncoder = graphicsContext->BeginRenderPass(graphics, renderPass, "Render pass");
                 m_imguiContext->RenderFrame(graphicsContext, renderEncoder);
 
                 graphicsContext->EndRenderPass(renderEncoder);
