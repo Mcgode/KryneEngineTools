@@ -118,7 +118,7 @@ namespace ProjectManager
 
         m_imguiContext = eastl::make_unique<KryneEngine::Modules::ImGui::Context>(
             m_window.get(),
-            m_renderPasses[0],
+            graphicsContext->GetPresentTextureFormat(),
             m_allocator);
 
         {
