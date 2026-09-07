@@ -8,6 +8,7 @@
 
 #include <EASTL/unique_ptr.h>
 #include <KryneEngine/Core/Graphics/GraphicsCommon.hpp>
+#include <KryneEngine/Core/Graphics/Handles.hpp>
 #include <KryneEngine/Core/Memory/DynamicArray.hpp>
 #include <KryneEngine/Core/Memory/Allocators/Allocator.hpp>
 
@@ -16,6 +17,7 @@ namespace KryneEngine
     struct RenderTargetViewHandle;
     struct RenderPassHandle;
     class Window;
+    class GraphicsContext;
 
     namespace Modules::GraphicsUtils
     {
@@ -60,9 +62,12 @@ namespace ProjectManager
         eastl::unique_ptr<Database> m_database;
         eastl::unique_ptr<AssetCooker> m_assetCooker;
         KryneEngine::GraphicsCommon::ApplicationInfo m_applicationInfo {};
+        KryneEngine::GraphicsCommon::DisplayOptions m_displayOptions {};
         KryneEngine::DynamicArray<KryneEngine::RenderTargetViewHandle> m_rtvs;
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;
         eastl::unique_ptr<KryneEngine::Window> m_window {};
+        KryneEngine::GraphicsContext* m_graphicsContext = nullptr;
+        KryneEngine::SwapChainHandle m_swapChain {};
         eastl::unique_ptr<KryneEngine::Modules::ImGui::Context> m_imguiContext {};
         eastl::unique_ptr<KryneEngine::Modules::GraphicsUtils::DeferredGraphicResourcesDestructor> m_deferredGraphicResourcesDestructor;
 

@@ -48,7 +48,7 @@ namespace ProjectManager
         m_applicationInfo.m_applicationVersion = { 0, 1, 0 };
         m_applicationInfo.m_engineVersion = { 0, 1, 0 };
 
-        m_applicationInfo.m_displayOptions.m_resizableWindow = true;
+        m_displayOptions.m_resizableWindow = true;
 
 #if defined(KE_GRAPHICS_API_VK)
         m_applicationInfo.m_api = KryneEngine::GraphicsCommon::Api::Vulkan_1_0;
@@ -73,12 +73,17 @@ namespace ProjectManager
     {
         Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, "Application shutting down");
 
-        m_imguiContext->Shutdown(m_window.get());
+        m_imguiContext->Shutdown(m_window.get(), m_graphicsContext);
         m_imguiContext.reset();
 
         for (const auto& renderPass : m_renderPasses)
-            m_window->GetGraphicsContext()->DestroyRenderPass(renderPass);
+            m_graphicsContext->DestroyRenderPass(renderPass);
 
+        if (m_graphicsContext != nullptr)
+        {
+            m_graphicsContext->DestroySwapChain(m_swapChain);
+            KryneEngine::GraphicsContext::Destroy(m_graphicsContext);
+        }
         m_window.reset();
     }
 
@@ -93,8 +98,14 @@ namespace ProjectManager
 
         m_assetCooker->Run();
 
-        m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo, m_allocator);
-        KryneEngine::GraphicsContext* graphicsContext = m_window->GetGraphicsContext();
+        m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo.m_applicationName, m_displayOptions, m_allocator);
+        m_graphicsContext = KryneEngine::GraphicsContext::Create(m_applicationInfo, m_allocator);
+        m_swapChain = m_graphicsContext->CreateSwapChain({
+            .m_nativeWindow = m_window->GetNativeHandle(),
+            .m_dimensions = m_window->GetFramebufferSize(),
+            .m_displayOptions = m_displayOptions,
+        });
+        KryneEngine::GraphicsContext* graphicsContext = m_graphicsContext;
 
         m_deferredGraphicResourcesDestructor =
             eastl::make_unique<KryneEngine::Modules::GraphicsUtils::DeferredGraphicResourcesDestructor>(m_allocator);
@@ -118,6 +129,7 @@ namespace ProjectManager
 
         m_imguiContext = eastl::make_unique<KryneEngine::Modules::ImGui::Context>(
             m_window.get(),
+            graphicsContext,
             graphicsContext->GetPresentTextureFormat(),
             m_allocator);
 
@@ -145,19 +157,19 @@ namespace ProjectManager
             Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, buffer);
         }
 
-        do
+        while (m_window->WaitForEvents())
         {
             m_deferredGraphicResourcesDestructor->Flush(graphicsContext);
 
             if (m_window->ShouldResizeSwapChain())
             {
-                if (m_window->GetGraphicsContext()->ResizeSwapChain(m_window.get()))
+                if (graphicsContext->ResizeSwapChain(m_swapChain, m_window->GetFramebufferSize()))
                 {
                     m_window->NotifySwapChainResized();
                 }
             }
 
-            const KryneEngine::u8 swapChainIdx = m_window->GetGraphicsContext()->GetCurrentPresentImageIndex();
+            const KryneEngine::u8 swapChainIdx = graphicsContext->GetCurrentPresentImageIndex();
             if (m_rtvs[swapChainIdx] != graphicsContext->GetPresentRenderTargetView(swapChainIdx))
             {
                 m_rtvs[swapChainIdx] = graphicsContext->GetPresentRenderTargetView(swapChainIdx);
@@ -176,7 +188,7 @@ namespace ProjectManager
                 });
             }
 
-            m_imguiContext->NewFrame(m_window.get());
+            m_imguiContext->NewFrame(m_window.get(), graphicsContext);
 
             KryneEngine::CommandListHandle transfer = graphicsContext->BeginGraphicsCommandList();
             KryneEngine::CommandListHandle graphics = graphicsContext->BeginGraphicsCommandList();
@@ -232,7 +244,10 @@ namespace ProjectManager
 
             graphicsContext->EndGraphicsCommandList(transfer);
             graphicsContext->EndGraphicsCommandList(graphics);
+
+            graphicsContext->EndFrame();
         }
-        while (graphicsContext->EndFrame());
+
+        graphicsContext->WaitForLastFrame();
     }
 }
