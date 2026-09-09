@@ -114,14 +114,14 @@ namespace ProjectManager
         m_renderPasses.Resize(graphicsContext->GetFrameContextCount());
         for (auto i = 0u; i < graphicsContext->GetFrameContextCount(); i++)
         {
-            m_rtvs[i] = graphicsContext->GetPresentRenderTargetView(i);
+            m_rtvs[i] = graphicsContext->GetSwapChainRenderTargetView(m_swapChain, i);
             m_renderPasses[i] = graphicsContext->CreateRenderPass({
                 .m_colorAttachments = {
                     KryneEngine::RenderPassDesc::Attachment {
                         .m_loadOperation = KryneEngine::RenderPassDesc::Attachment::LoadOperation::Clear,
                         .m_storeOperation = KryneEngine::RenderPassDesc::Attachment::StoreOperation::Store,
                         .m_finalLayout = KryneEngine::TextureLayout::Present,
-                        .m_rtv = graphicsContext->GetPresentRenderTargetView(i),
+                        .m_rtv = graphicsContext->GetSwapChainRenderTargetView(m_swapChain, i),
                     }
                 },
             });
@@ -130,7 +130,7 @@ namespace ProjectManager
         m_imguiContext = eastl::make_unique<KryneEngine::Modules::ImGui::Context>(
             m_window.get(),
             graphicsContext,
-            graphicsContext->GetPresentTextureFormat(),
+            graphicsContext->GetSwapChainFormat(m_swapChain),
             m_allocator);
 
         {
@@ -169,10 +169,10 @@ namespace ProjectManager
                 }
             }
 
-            const KryneEngine::u8 swapChainIdx = graphicsContext->GetCurrentPresentImageIndex();
-            if (m_rtvs[swapChainIdx] != graphicsContext->GetPresentRenderTargetView(swapChainIdx))
+            const KryneEngine::u8 swapChainIdx = graphicsContext->GetSwapChainCurrentImageIndex(m_swapChain);
+            if (m_rtvs[swapChainIdx] != graphicsContext->GetSwapChainRenderTargetView(m_swapChain, swapChainIdx))
             {
-                m_rtvs[swapChainIdx] = graphicsContext->GetPresentRenderTargetView(swapChainIdx);
+                m_rtvs[swapChainIdx] = graphicsContext->GetSwapChainRenderTargetView(m_swapChain, swapChainIdx);
                 m_deferredGraphicResourcesDestructor->DeferDestruction(
                     m_renderPasses[swapChainIdx],
                     graphicsContext->GetFrameId() + graphicsContext->GetFrameContextCount() - 1);
@@ -252,7 +252,7 @@ namespace ProjectManager
             graphicsContext->EndGraphicsCommandList(transfer);
             graphicsContext->EndGraphicsCommandList(graphics);
 
-            graphicsContext->EndFrame();
+            graphicsContext->EndFrame({ &m_swapChain, 1 });
         }
 
         graphicsContext->WaitForLastFrame();
