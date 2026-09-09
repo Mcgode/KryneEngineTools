@@ -17,6 +17,7 @@ namespace KryneEngine
     struct RenderTargetViewHandle;
     struct RenderPassHandle;
     class Window;
+    class WindowManager;
     class GraphicsContext;
 
     namespace Modules::GraphicsUtils
@@ -65,7 +66,8 @@ namespace ProjectManager
         KryneEngine::GraphicsCommon::DisplayOptions m_displayOptions {};
         KryneEngine::DynamicArray<KryneEngine::RenderTargetViewHandle> m_rtvs;
         KryneEngine::DynamicArray<KryneEngine::RenderPassHandle> m_renderPasses;
-        eastl::unique_ptr<KryneEngine::Window> m_window {};
+        eastl::unique_ptr<KryneEngine::WindowManager> m_windowManager {};
+        KryneEngine::Window* m_window = nullptr;
         KryneEngine::GraphicsContext* m_graphicsContext = nullptr;
         KryneEngine::SwapChainHandle m_swapChain {};
         eastl::unique_ptr<KryneEngine::Modules::ImGui::Context> m_imguiContext {};

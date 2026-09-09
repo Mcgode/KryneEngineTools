@@ -11,6 +11,7 @@
 #include <KryneEngine/Core/Graphics/RenderPass.hpp>
 #include <KryneEngine/Core/Platform/FileSystem.hpp>
 #include <KryneEngine/Core/Window/Window.hpp>
+#include <KryneEngine/Core/Window/WindowManager.hpp>
 #include <KryneEngine/Modules/GraphicsUtils/DeferredGraphicResourcesDestructor.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
 
@@ -73,7 +74,7 @@ namespace ProjectManager
     {
         Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, "Application shutting down");
 
-        m_imguiContext->Shutdown(m_window.get(), m_graphicsContext);
+        m_imguiContext->Shutdown(m_windowManager.get(), m_graphicsContext);
         m_imguiContext.reset();
 
         for (const auto& renderPass : m_renderPasses)
@@ -84,7 +85,7 @@ namespace ProjectManager
             m_graphicsContext->DestroySwapChain(m_swapChain);
             KryneEngine::GraphicsContext::Destroy(m_graphicsContext);
         }
-        m_window.reset();
+        m_windowManager.reset();
     }
 
     void Application::RegisterUiWindow(IUiWindow* _window)
@@ -98,7 +99,8 @@ namespace ProjectManager
 
         m_assetCooker->Run();
 
-        m_window = eastl::make_unique<KryneEngine::Window>(m_applicationInfo.m_applicationName, m_displayOptions, m_allocator);
+        m_windowManager = eastl::make_unique<KryneEngine::WindowManager>(m_allocator);
+        m_window = m_windowManager->CreateWindow(m_applicationInfo.m_applicationName, m_displayOptions);
         m_graphicsContext = KryneEngine::GraphicsContext::Create(m_applicationInfo, m_allocator);
         m_swapChain = m_graphicsContext->CreateSwapChain({
             .m_nativeWindow = m_window->GetNativeHandle(),
@@ -128,7 +130,8 @@ namespace ProjectManager
         }
 
         m_imguiContext = eastl::make_unique<KryneEngine::Modules::ImGui::Context>(
-            m_window.get(),
+            m_window,
+            m_windowManager.get(),
             graphicsContext,
             graphicsContext->GetSwapChainFormat(m_swapChain),
             m_allocator);
@@ -157,16 +160,14 @@ namespace ProjectManager
             Logger::GetInstance()->Log(LogSeverity::Debug, kCoreLogCategory, buffer);
         }
 
-        while (m_window->WaitForEvents())
+        while (!m_windowManager->AllWindowsClosed())
         {
+            m_windowManager->PollEvents();
             m_deferredGraphicResourcesDestructor->Flush(graphicsContext);
 
-            if (m_window->ShouldResizeSwapChain())
+            if (m_windowManager->ConsumeResizeFlag(m_window))
             {
-                if (graphicsContext->ResizeSwapChain(m_swapChain, m_window->GetFramebufferSize()))
-                {
-                    m_window->NotifySwapChainResized();
-                }
+                graphicsContext->ResizeSwapChain(m_swapChain, m_window->GetFramebufferSize());
             }
 
             const KryneEngine::u8 swapChainIdx = graphicsContext->GetSwapChainCurrentImageIndex(m_swapChain);
@@ -188,7 +189,7 @@ namespace ProjectManager
                 });
             }
 
-            m_imguiContext->NewFrame(m_window.get(), graphicsContext);
+            m_imguiContext->NewFrame(m_window, graphicsContext);
 
             KryneEngine::CommandListHandle transfer = graphicsContext->BeginGraphicsCommandList();
             KryneEngine::CommandListHandle graphics = graphicsContext->BeginGraphicsCommandList();
