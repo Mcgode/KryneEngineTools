@@ -189,7 +189,7 @@ namespace ProjectManager
                 });
             }
 
-            m_imguiContext->NewFrame(m_window, graphicsContext);
+            m_imguiContext->NewFrame(m_window, graphicsContext, m_swapChain);
 
             KryneEngine::CommandListHandle transfer = graphicsContext->BeginGraphicsCommandList();
             KryneEngine::CommandListHandle graphics = graphicsContext->BeginGraphicsCommandList();
