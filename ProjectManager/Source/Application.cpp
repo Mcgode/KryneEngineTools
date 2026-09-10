@@ -100,7 +100,7 @@ namespace ProjectManager
         m_assetCooker->Run();
 
         m_windowManager = eastl::make_unique<KryneEngine::WindowManager>(m_allocator);
-        m_window = m_windowManager->CreateWindow(m_applicationInfo.m_applicationName, m_displayOptions);
+        m_window = m_windowManager->SpawnWindow(m_applicationInfo.m_applicationName, m_displayOptions);
         m_graphicsContext = KryneEngine::GraphicsContext::Create(m_applicationInfo, m_allocator);
         m_swapChain = m_graphicsContext->CreateSwapChain({
             .m_nativeWindow = m_window->GetNativeHandle(),
