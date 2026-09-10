@@ -19,8 +19,8 @@ namespace ProjectManager
     {
         KryneEngine::DynamicArray<eastl::string_view> directories(_assetCooker->m_rawAssetDirectories.size() + 1);
         for (auto i = 0u; i < m_assetCooker->m_rawAssetDirectories.size(); ++i)
-            directories[i] = m_assetCooker->m_rawAssetDirectories[i].c_str();
-        directories[directories.Size() - 1] = m_assetCooker->m_outputDirectory.c_str();
+            directories[i] = m_assetCooker->m_rawAssetDirectories[i].string().c_str();
+        directories[directories.Size() - 1] = m_assetCooker->m_outputDirectory.string().c_str();
 
         const KryneEngine::Platform::DirectoryMonitorCreateInfo createInfo {
             .m_directories = { directories.Data(), directories.Size() },

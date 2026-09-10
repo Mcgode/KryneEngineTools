@@ -32,7 +32,7 @@ namespace ProjectManager
         char sql[2048];
         sqlite3_stmt* stmt;
 
-        snprintf(sql, sizeof(sql), "SELECT path, pipeline FROM cookedAssets WHERE path LIKE '%s%%'", archive.m_mountPoint.c_str());
+        snprintf(sql, sizeof(sql), "SELECT path, pipeline FROM cookedAssets WHERE path LIKE '%s%%'", archive.m_mountPoint.string().c_str());
         if (m_assetCooker->m_database->Prepare(sql, &stmt) != SQLITE_OK)
         {
             Logger::GetInstance()->LogFormatted(LogSeverity::Error, AssetCooker::kLogCategory, "Failed to retrieve cooked asset list for '%s'", _assetRelativePath.data());
@@ -62,14 +62,14 @@ namespace ProjectManager
         const auto relativeMount = std::filesystem::relative(archive.m_mountPoint, m_assetCooker->m_outputDirectory);
         ArchiveMaker archiveMaker(
             archiveFile,
-            relativeMount.c_str(),
+            relativeMount.string().c_str(),
             assets.size());
         for (auto& assetPair : assets)
         {
             std::ifstream assetFile(assetPair.first.c_str(), std::ios::binary | std::ios::in);
             const auto relativeAsset = std::filesystem::relative(assetPair.first, archive.m_mountPoint);
             const FileFlags flags = assetPair.second.m_compress ? FileFlags::ZstdCompressed : FileFlags::None;
-            archiveMaker.AddFile(assetFile, relativeAsset.c_str(), flags);
+            archiveMaker.AddFile(assetFile, relativeAsset.string().c_str(), flags);
             assetFile.close();
         }
         archiveMaker.Finish();
@@ -108,7 +108,7 @@ namespace ProjectManager
             return;
 
         yyjson_read_err err;
-        yyjson_doc* doc = yyjson_read_file(fullPath.c_str(), 0, nullptr, &err);
+        yyjson_doc* doc = yyjson_read_file(fullPath.string().c_str(), 0, nullptr, &err);
         if (doc == nullptr)
         {
             Logger::GetInstance()->LogFormatted(LogSeverity::Error, AssetCooker::kLogCategory,

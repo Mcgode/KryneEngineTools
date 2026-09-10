@@ -40,7 +40,7 @@ namespace ProjectManager
         const std::filesystem::path dbPath = dbParentPath / "ProjectManager.db";
         if (!std::filesystem::exists(dbParentPath))
             std::filesystem::create_directories(dbParentPath);
-        m_database = eastl::make_unique<Database>(dbPath.c_str());
+        m_database = eastl::make_unique<Database>(dbPath.string().c_str());
 
         m_assetCooker = eastl::make_unique<AssetCooker>(m_database.get());
 
@@ -138,7 +138,7 @@ namespace ProjectManager
 
         {
             char path[1024];
-            snprintf(path, sizeof(path), "%s/ProjectManager.ini", KryneEngine::Platform::GetDefaultConfigDirectory(m_applicationInfo.m_applicationName).c_str());
+            snprintf(path, sizeof(path), "%s/ProjectManager.ini", KryneEngine::Platform::GetDefaultConfigDirectory(m_applicationInfo.m_applicationName).string().c_str());
             ImGui::GetIO().IniFilename = path;
         }
 

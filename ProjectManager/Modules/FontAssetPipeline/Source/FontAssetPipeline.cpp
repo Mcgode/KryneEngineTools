@@ -48,7 +48,7 @@ namespace ProjectManager
 
         FT_Face face;
         {
-            const FT_Error error = FT_New_Face(m_ftLibrary, input.c_str(), 0, &face);
+            const FT_Error error = FT_New_Face(m_ftLibrary, input.string().c_str(), 0, &face);
             if (error != FT_Err_Ok)
             {
                 Logger::GetInstance()->LogFormatted(LogSeverity::Error, AssetCooker::kLogCategory,

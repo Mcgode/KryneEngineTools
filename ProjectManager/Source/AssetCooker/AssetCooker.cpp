@@ -274,13 +274,13 @@ namespace ProjectManager
             KE_ASSERT(!parent.empty());
         }
 
-        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.c_str());
+        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.string().c_str());
         KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
         if (sqlite3_step(stmt) != SQLITE_ROW)
         {
             sqlite3_finalize(stmt);
 
-            snprintf(sql, sizeof(sql), "INSERT INTO assets (path) VALUES ('%s') RETURNING id", _asset.c_str());
+            snprintf(sql, sizeof(sql), "INSERT INTO assets (path) VALUES ('%s') RETURNING id", _asset.string().c_str());
             KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
             KE_VERIFY(sqlite3_step(stmt) == SQLITE_ROW);
         }
@@ -448,7 +448,7 @@ namespace ProjectManager
         sqlite3_stmt* stmt;
         snprintf(sql, sizeof(sql),
             "SELECT assets.path, cookedAssets.writeDate, assets.id, cookedAssets.pipeline FROM cookedAssets JOIN assets ON assets.id = cookedAssets.sourceId WHERE cookedAssets.path = '%s'",
-            _asset.c_str());
+            _asset.string().c_str());
 
         KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
         if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -488,7 +488,7 @@ namespace ProjectManager
         const std::filesystem::path& _newPath) const
     {
         char sql[2048];
-        snprintf(sql, sizeof(sql), "UPDATE assets SET path = '%s' WHERE path = '%s'", _newPath.c_str(), _oldPath.c_str());
+        snprintf(sql, sizeof(sql), "UPDATE assets SET path = '%s' WHERE path = '%s'", _newPath.string().c_str(), _oldPath.string().c_str());
         KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
     }
 
@@ -499,7 +499,7 @@ namespace ProjectManager
         char sql[2048];
         sqlite3_stmt* stmt;
 
-        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.c_str());
+        snprintf(sql, sizeof(sql), "SELECT id FROM assets WHERE path = '%s'", _asset.string().c_str());
         KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
 
         if (sqlite3_step(stmt) != SQLITE_ROW)
@@ -525,7 +525,7 @@ namespace ProjectManager
 
     IAssetPipeline* AssetCooker::FindPipeline(const std::filesystem::path& _asset)
     {
-        eastl::string filename = _asset.filename().c_str();
+        eastl::string filename = _asset.filename().string().c_str();
         size_t pos = filename.find_first_of('.');
         while (pos != eastl::string::npos)
         {
@@ -643,7 +643,7 @@ namespace ProjectManager
                 snprintf(
                     sql, sizeof(sql),
                     "SELECT cookedAssets.path, writeDate FROM cookedAssets JOIN assets ON assets.id = cookedAssets.sourceId WHERE assets.path = '%s'",
-                    entry.m_asset.c_str());
+                    entry.m_asset.string().c_str());
                 KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
                 if (sqlite3_step(stmt) == SQLITE_ROW)
                 {
@@ -678,7 +678,7 @@ namespace ProjectManager
             }
 
             const std::filesystem::path relativePath = entry.m_asset.lexically_relative(entry.m_assetDirectory);
-            KE_ZoneScopedF("Processing '%s'", relativePath.c_str());
+            KE_ZoneScopedF("Processing '%s'", relativePath.string().c_str());
 
             m_cookingAssetPerThread[_index] = relativePath;
 
@@ -691,9 +691,9 @@ namespace ProjectManager
                     result = entry.m_pipeline->CookAsset(
                         this,
                         &entry,
-                       relativePath.c_str(),
-                       entry.m_assetDirectory.c_str(),
-                       m_outputDirectory.c_str());
+                       relativePath.string().c_str(),
+                       entry.m_assetDirectory.string().c_str(),
+                       m_outputDirectory.string().c_str());
                     if (!result.success)
                     {
                         Logger::GetInstance()->LogFormatted(LogSeverity::Error, kLogCategory,
@@ -717,7 +717,7 @@ namespace ProjectManager
                         const KryneEngine::u64 cookedWriteTime = std::filesystem::last_write_time(cookedOutputPath).time_since_epoch().count();
                         snprintf(sql, sizeof(sql), "INSERT INTO cookedAssets (sourceId, path, pipeline, pipelineVersion, writeDate) VALUES (%d, '%s', %d, %llu, %llu)",
                             entry.m_assetId,
-                            cookedOutputPath.c_str(),
+                            cookedOutputPath.string().c_str(),
                             entry.m_pipelineId,
                             pipelineVersion,
                             cookedWriteTime);
