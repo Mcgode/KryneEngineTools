@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <filesystem>
 #include <EASTL/queue.h>
 #include <EASTL/vector_set.h>
