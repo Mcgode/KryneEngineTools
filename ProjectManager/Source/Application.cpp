@@ -6,21 +6,22 @@
 
 #include "ProjectManager/Application.hpp"
 
-#include <imgui_internal.h>
 #include <KryneEngine/Core/Graphics/GraphicsContext.hpp>
 #include <KryneEngine/Core/Graphics/RenderPass.hpp>
 #include <KryneEngine/Core/Platform/FileSystem.hpp>
+#include <KryneEngine/Core/Window/Input/InputManager.hpp>
 #include <KryneEngine/Core/Window/Window.hpp>
 #include <KryneEngine/Core/Window/WindowManager.hpp>
 #include <KryneEngine/Modules/GraphicsUtils/DeferredGraphicResourcesDestructor.hpp>
 #include <KryneEngine/Modules/ImGui/Context.hpp>
+#include <imgui_internal.h>
 
 #include "AssetCooker/AssetCookerWindow.hpp"
 #include "Logger/CoreCategory.hpp"
 #include "Logger/LogWindow.hpp"
-#include "ProjectManager/IUiWindow.hpp"
 #include "ProjectManager/AssetCooker/AssetCooker.hpp"
 #include "ProjectManager/Database/Database.hpp"
+#include "ProjectManager/IUiWindow.hpp"
 #include "ProjectManager/Logger/LogFilter.hpp"
 #include "ProjectManager/Logger/Logger.hpp"
 
@@ -163,6 +164,7 @@ namespace ProjectManager
         while (!m_windowManager->AllWindowsClosed())
         {
             m_windowManager->PollEvents();
+            m_windowManager->GetInput().Update();
             m_deferredGraphicResourcesDestructor->Flush(graphicsContext);
 
             if (m_windowManager->ConsumeResizeFlag(m_window))
