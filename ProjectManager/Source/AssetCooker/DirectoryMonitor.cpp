@@ -17,13 +17,17 @@ namespace ProjectManager
     DirectoryMonitor::DirectoryMonitor(AssetCooker* _assetCooker)
         : m_assetCooker(_assetCooker)
     {
-        KryneEngine::DynamicArray<eastl::string_view> directories(_assetCooker->m_rawAssetDirectories.size() + 1);
+        KryneEngine::DynamicArray<std::string> directories(_assetCooker->m_rawAssetDirectories.size() + 1);
         for (auto i = 0u; i < m_assetCooker->m_rawAssetDirectories.size(); ++i)
-            directories[i] = m_assetCooker->m_rawAssetDirectories[i].string().c_str();
-        directories[directories.Size() - 1] = m_assetCooker->m_outputDirectory.string().c_str();
+            directories[i] = m_assetCooker->m_rawAssetDirectories[i].string();
+        directories[directories.Size() - 1] = m_assetCooker->m_outputDirectory.string();
+
+        KryneEngine::DynamicArray<eastl::string_view> directoryViews(_assetCooker->m_rawAssetDirectories.size() + 1);
+        for (auto i = 0u; i < directoryViews.Size(); ++i)
+            directoryViews[i] = directories[i].c_str();
 
         const KryneEngine::Platform::DirectoryMonitorCreateInfo createInfo {
-            .m_directories = { directories.Data(), directories.Size() },
+            .m_directories = { directoryViews.Data(), directoryViews.Size() },
             .m_threadName = "AssetCookerDirectoryMonitor",
             .m_fileCreatedCallback = [this](const eastl::string_view _path)
             {
