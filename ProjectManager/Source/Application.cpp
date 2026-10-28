@@ -221,7 +221,7 @@ namespace ProjectManager
                 ImGui::Spacing();
                 ImGui::PushFont(bigFont);
                 ImGui::Text("Hello, world!");
-                ImGui::Text("Welcome to Liberators project Manager!");
+                ImGui::Text("Welcome to Project Manager!");
                 ImGui::PopFont();
                 ImGui::Spacing();
             }
