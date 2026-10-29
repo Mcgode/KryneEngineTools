@@ -106,7 +106,6 @@ namespace ProjectManager
         m_swapChain = m_graphicsContext->CreateSwapChain({
             .m_nativeWindow = m_window->GetNativeHandle(),
             .m_dimensions = m_window->GetFramebufferSize(),
-            .m_displayOptions = m_displayOptions,
         });
         KryneEngine::GraphicsContext* graphicsContext = m_graphicsContext;
 
