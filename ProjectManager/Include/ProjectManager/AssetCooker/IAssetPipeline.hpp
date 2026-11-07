@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <EASTL/string.h>
 #include <EASTL/vector.h>
+#include <EASTL/span.h>
+#include <KryneEngine/Core/Common/Types.hpp>
 
 namespace ProjectManager
 {
