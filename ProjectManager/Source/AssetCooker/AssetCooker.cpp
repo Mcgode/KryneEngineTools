@@ -468,7 +468,8 @@ namespace ProjectManager
                         continue;
 
                     IAssetPipeline* pipeline = FindPipeline(input);
-                    KE_ASSERT(pipeline != nullptr);
+                    if (pipeline == nullptr)
+                        continue;
 
                     Enqueue(QueueEntry {
                         .m_asset = input,
