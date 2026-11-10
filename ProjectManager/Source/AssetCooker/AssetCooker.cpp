@@ -694,34 +694,37 @@ namespace ProjectManager
                        relativePath.string().c_str(),
                        entry.m_assetDirectory.string().c_str(),
                        m_outputDirectory.string().c_str());
+                    // A failed cook still goes through the bookkeeping below, so the asset leaves `m_cookingAssets`
+                    // (archives wait for it to be empty) and a pending recook still happens.
                     if (!result.success)
                     {
                         Logger::GetInstance()->LogFormatted(LogSeverity::Error, kLogCategory,
                            "Failed to cook '%s'", relativePath.c_str());
-                        continue;
                     }
-                    Logger::GetInstance()->LogFormatted(LogSeverity::Info, kLogCategory,
-                    "Cooked asset '%s', with an output of %lld files",
-                        relativePath.c_str(), result.m_resultingFiles.size());
-
-
-                    KE_VERIFY(!result.m_resultingFiles.empty());
-
-                    snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", entry.m_assetId);
-                    KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
-
-                    const KryneEngine::u64 pipelineVersion = entry.m_pipeline->GetVersion();
-                    for (const auto& file: result.m_resultingFiles)
+                    else
                     {
-                        const std::filesystem::path cookedOutputPath { m_outputDirectory / file };
-                        const KryneEngine::u64 cookedWriteTime = std::filesystem::last_write_time(cookedOutputPath).time_since_epoch().count();
-                        snprintf(sql, sizeof(sql), "INSERT INTO cookedAssets (sourceId, path, pipeline, pipelineVersion, writeDate) VALUES (%d, '%s', %d, %llu, %llu)",
-                            entry.m_assetId,
-                            cookedOutputPath.string().c_str(),
-                            entry.m_pipelineId,
-                            pipelineVersion,
-                            cookedWriteTime);
-                        KE_ASSERT(m_database->Execute(sql) == SQLITE_OK);
+                        Logger::GetInstance()->LogFormatted(LogSeverity::Info, kLogCategory,
+                        "Cooked asset '%s', with an output of %lld files",
+                            relativePath.c_str(), result.m_resultingFiles.size());
+
+                        KE_VERIFY(!result.m_resultingFiles.empty());
+
+                        snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", entry.m_assetId);
+                        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+                        const KryneEngine::u64 pipelineVersion = entry.m_pipeline->GetVersion();
+                        for (const auto& file: result.m_resultingFiles)
+                        {
+                            const std::filesystem::path cookedOutputPath { m_outputDirectory / file };
+                            const KryneEngine::u64 cookedWriteTime = std::filesystem::last_write_time(cookedOutputPath).time_since_epoch().count();
+                            snprintf(sql, sizeof(sql), "INSERT INTO cookedAssets (sourceId, path, pipeline, pipelineVersion, writeDate) VALUES (%d, '%s', %d, %llu, %llu)",
+                                entry.m_assetId,
+                                cookedOutputPath.string().c_str(),
+                                entry.m_pipelineId,
+                                pipelineVersion,
+                                cookedWriteTime);
+                            KE_ASSERT(m_database->Execute(sql) == SQLITE_OK);
+                        }
                     }
                 }
 
