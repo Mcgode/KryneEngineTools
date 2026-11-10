@@ -46,8 +46,18 @@ namespace ProjectManager
             const std::filesystem::path path = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), sqlite3_column_bytes(stmt, 0));
             if (archive.BelongsTo(path))
             {
+                // The database can hold files cooked by a pipeline that is no longer registered (e.g. removed from
+                // the project), until their source asset is probed again. Their pipeline can't be asked about them.
                 const KryneEngine::u32 id = sqlite3_column_int(stmt, 1);
-                ArchivingOptions options = m_assetCooker->m_pipelineIds[id]->RetrieveOutputFileArchingOptions(path);
+                const auto pipelineIt = m_assetCooker->m_pipelineIds.find(id);
+                if (pipelineIt == m_assetCooker->m_pipelineIds.end() || pipelineIt->second == nullptr)
+                {
+                    Logger::GetInstance()->LogFormatted(LogSeverity::Warning, AssetCooker::kLogCategory,
+                        "Skipping '%s' in archive '%s': it was cooked by an unregistered pipeline",
+                        path.string().c_str(), _assetRelativePath.data());
+                    continue;
+                }
+                ArchivingOptions options = pipelineIt->second->RetrieveOutputFileArchingOptions(path);
                 if (options.m_archivable)
                     assets.emplace_back(path, options);
             }
