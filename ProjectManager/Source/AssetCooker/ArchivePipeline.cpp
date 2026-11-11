@@ -167,7 +167,7 @@ namespace ProjectManager
 
             size_t idx, max;
             yyjson_val* entry;
-            yyjson_arr_foreach(root, idx, max, entry)
+            yyjson_arr_foreach(exclusions, idx, max, entry)
             {
                 if (yyjson_get_type(entry) != YYJSON_TYPE_STR)
                 {
@@ -176,7 +176,9 @@ namespace ProjectManager
                     yyjson_doc_free(doc);
                     return;
                 }
-                archive.m_exclusions.emplace_back(fullPath.parent_path() / yyjson_get_str(entry));
+                // Relative to the archive file like the mount point, and matched against cooked files, so in the
+                // output directory.
+                archive.m_exclusions.emplace_back(_outputDirectory / _relativePath.parent_path() / yyjson_get_str(entry));
             }
         }
 
