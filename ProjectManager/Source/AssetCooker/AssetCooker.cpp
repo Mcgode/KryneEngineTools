@@ -54,6 +54,14 @@ namespace ProjectManager
             KE_ASSERT(result == SQLITE_OK);
         }
 
+        if (!m_database->TableExists("assetDependencies"))
+        {
+            Logger::GetInstance()->Log(LogSeverity::Info, kLogCategory, "Creating AssetCooker 'assetDependencies' database table");
+            const char* sql = "CREATE TABLE assetDependencies (sourceId INTEGER NOT NULL, path TEXT NOT NULL)";
+            const int result = m_database->Execute(sql);
+            KE_ASSERT(result == SQLITE_OK);
+        }
+
         Logger::GetInstance()->Log(LogSeverity::Verbose, kLogCategory, "AssetCooker initialized");
 
         m_workThreads.Resize(eastl::max(1u, std::thread::hardware_concurrency() - 1));
@@ -312,7 +320,8 @@ namespace ProjectManager
             return;
         }
 
-        const auto assetWriteTime = std::filesystem::last_write_time(_asset);
+        auto assetWriteTime = std::filesystem::last_write_time(_asset);
+        ApplyDependencyWriteTimes(assetId, assetWriteTime);
 
         snprintf(sql, sizeof(sql), "SELECT id FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
         KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
@@ -381,7 +390,7 @@ namespace ProjectManager
 
                     Logger::GetInstance()->LogFormatted(
                         LogSeverity::Verbose, kLogCategory,
-                        "Input asset '%s' modified after last write date of output '%s', will recook",
+                        "Input asset '%s' or one of its dependencies modified after last write date of output '%s', will recook",
                         std::filesystem::relative(_asset, parent).c_str(),
                         std::filesystem::relative(cookedOutputPath, m_outputDirectory).c_str());
                 }
@@ -484,6 +493,83 @@ namespace ProjectManager
         sqlite3_finalize(stmt);
     }
 
+    void AssetCooker::ProbeDependentAssets(const std::filesystem::path& _file)
+    {
+        char sql[2048];
+        sqlite3_stmt* stmt;
+        snprintf(sql, sizeof(sql),
+            "SELECT DISTINCT assets.path FROM assetDependencies JOIN assets ON assets.id = assetDependencies.sourceId WHERE assetDependencies.path = '%s'",
+            std::filesystem::weakly_canonical(_file).string().c_str());
+
+        eastl::vector<std::filesystem::path> dependents;
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            dependents.emplace_back(
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0));
+        }
+        sqlite3_finalize(stmt);
+
+        // Only one level: pipelines report indirect dependencies themselves, and this can't loop on a cycle.
+        for (const std::filesystem::path& dependent: dependents)
+        {
+            if (!std::filesystem::exists(dependent))
+                continue;
+
+            Logger::GetInstance()->LogFormatted(
+                LogSeverity::Verbose, kLogCategory,
+                "Dependency '%s' changed, probing '%s'",
+                _file.string().c_str(), dependent.string().c_str());
+            ProbeInputAsset(dependent);
+        }
+    }
+
+    void AssetCooker::ApplyDependencyWriteTimes(
+        const KryneEngine::u32 _assetId,
+        std::filesystem::file_time_type& _writeTime) const
+    {
+        char sql[2048];
+        sqlite3_stmt* stmt;
+        snprintf(sql, sizeof(sql), "SELECT path FROM assetDependencies WHERE sourceId = %d", _assetId);
+        KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            const std::filesystem::path dependency {
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) + sqlite3_column_bytes(stmt, 0)
+            };
+
+            std::error_code error;
+            const std::filesystem::file_time_type writeTime = std::filesystem::last_write_time(dependency, error);
+            if (error)
+            {
+                _writeTime = std::filesystem::file_time_type::max();
+                break;
+            }
+            _writeTime = eastl::max(_writeTime, writeTime);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    void AssetCooker::RecordDependencies(
+        const KryneEngine::u32 _assetId,
+        const eastl::vector<std::filesystem::path>& _dependencies) const
+    {
+        char sql[2048];
+        snprintf(sql, sizeof(sql), "DELETE FROM assetDependencies WHERE sourceId = %d", _assetId);
+        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+        for (const std::filesystem::path& dependency: _dependencies)
+        {
+            // Canonical when possible, so the paths match the ones the directory monitor reports.
+            snprintf(sql, sizeof(sql), "INSERT INTO assetDependencies (sourceId, path) VALUES (%d, '%s')",
+                _assetId,
+                std::filesystem::weakly_canonical(dependency).string().c_str());
+            KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+        }
+    }
+
     void AssetCooker::OnInputAssetRenamed(
         const std::filesystem::path& _oldPath,
         const std::filesystem::path& _newPath) const
@@ -512,6 +598,9 @@ namespace ProjectManager
         sqlite3_finalize(stmt);
 
         snprintf(sql, sizeof(sql), "DELETE FROM cookedAssets WHERE sourceId = %d", assetId);
+        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
+
+        snprintf(sql, sizeof(sql), "DELETE FROM assetDependencies WHERE sourceId = %d", assetId);
         KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
 
         snprintf(sql, sizeof(sql), "DELETE FROM assets WHERE id = %d", assetId);
@@ -640,7 +729,8 @@ namespace ProjectManager
             bool upToDate = false;
             if (!entry.m_forceCook)
             {
-                const auto assetWriteTime = std::filesystem::last_write_time(entry.m_asset);
+                auto assetWriteTime = std::filesystem::last_write_time(entry.m_asset);
+                ApplyDependencyWriteTimes(entry.m_assetId, assetWriteTime);
                 snprintf(
                     sql, sizeof(sql),
                     "SELECT cookedAssets.path, writeDate FROM cookedAssets JOIN assets ON assets.id = cookedAssets.sourceId WHERE assets.path = '%s'",
@@ -695,6 +785,11 @@ namespace ProjectManager
                        relativePath.string().c_str(),
                        entry.m_assetDirectory.string().c_str(),
                        m_outputDirectory.string().c_str());
+
+                    // A failed cook may stop before finding its dependencies: keep the previous ones then.
+                    if (result.success || !result.m_dependencies.empty())
+                        RecordDependencies(entry.m_assetId, result.m_dependencies);
+
                     // A failed cook still goes through the bookkeeping below, so the asset leaves `m_cookingAssets`
                     // (archives wait for it to be empty) and a pending recook still happens.
                     if (!result.success)

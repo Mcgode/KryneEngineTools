@@ -39,6 +39,15 @@ namespace ProjectManager
         {
             bool success;
             eastl::vector<std::filesystem::path> m_resultingFiles;
+
+            /**
+             * @brief Absolute paths of the files other than the asset itself that the cook read.
+             * @details A change to one of them recooks the asset, so does a missing one. They are recorded after a
+             * successful cook, and after a failed one that reports any, so fixing a dependency recooks a failed asset.
+             * A dependency may be outside of the raw asset directories, but then only startup probing notices its
+             * changes.
+             */
+            eastl::vector<std::filesystem::path> m_dependencies;
         };
 
         [[nodiscard]] virtual CookResult CookAsset(

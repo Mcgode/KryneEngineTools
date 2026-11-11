@@ -40,6 +40,7 @@ namespace ProjectManager
                 if (!IsOutputFile(path))
                 {
                     m_assetCooker->ProbeInputAsset(path);
+                    m_assetCooker->ProbeDependentAssets(path);
                 }
             },
             .m_fileModifiedCallback = [this](const eastl::string_view _path)
@@ -56,6 +57,7 @@ namespace ProjectManager
                 else
                 {
                     m_assetCooker->ProbeInputAsset(path);
+                    m_assetCooker->ProbeDependentAssets(path);
                 }
             },
             .m_fileRenamedCallback = [this](const eastl::string_view _oldPath, const eastl::string_view _newPath)
@@ -82,6 +84,11 @@ namespace ProjectManager
                         m_assetCooker->OnInputAssetDeleted(oldPath);
                         m_assetCooker->ProbeInputAsset(newPath);
                     }
+
+                    // Both paths: assets depending on the old one lost it, and saving through a temporary file
+                    // (as Blender does) renames it to the new one.
+                    m_assetCooker->ProbeDependentAssets(oldPath);
+                    m_assetCooker->ProbeDependentAssets(newPath);
                 }
             },
             .m_fileDeletedCallback = [this](const eastl::string_view _path)
@@ -98,6 +105,7 @@ namespace ProjectManager
                 else
                 {
                     m_assetCooker->OnInputAssetDeleted(path);
+                    m_assetCooker->ProbeDependentAssets(path);
                 }
             },
         };

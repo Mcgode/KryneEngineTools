@@ -114,6 +114,18 @@ namespace ProjectManager
 
         void ProbeOutputAsset(const std::filesystem::path& _asset);
 
+        /// Probes every input asset whose last cook depended on `_file`, after `_file` was created, modified or removed.
+        void ProbeDependentAssets(const std::filesystem::path& _file);
+
+        /**
+         * @brief Folds the write times of the dependencies recorded for the asset into `_writeTime`.
+         * @details A missing dependency sets it to the maximum time, so the asset is never up to date.
+         */
+        void ApplyDependencyWriteTimes(KryneEngine::u32 _assetId, std::filesystem::file_time_type& _writeTime) const;
+
+        /// Replaces the dependencies recorded for the asset.
+        void RecordDependencies(KryneEngine::u32 _assetId, const eastl::vector<std::filesystem::path>& _dependencies) const;
+
         void OnInputAssetRenamed(const std::filesystem::path& _oldPath, const std::filesystem::path& _newPath) const;
 
         void OnInputAssetDeleted(const std::filesystem::path& _asset);
