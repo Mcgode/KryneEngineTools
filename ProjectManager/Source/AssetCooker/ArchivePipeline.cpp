@@ -84,10 +84,13 @@ namespace ProjectManager
         }
         archiveMaker.Finish();
 
-        return {
-            true,
-            { outputPath }
-        };
+        // The archived files are dependencies, so an archive older than one of them is rebuilt at the next probe,
+        // e.g. when a file was recooked while the archive wasn't loaded, or the cooker stopped before archiving.
+        CookResult result { true, { outputPath } };
+        result.m_dependencies.reserve(assets.size());
+        for (const auto& assetPair : assets)
+            result.m_dependencies.push_back(assetPair.first);
+        return result;
     }
 
     bool ArchivePipeline::Archive::BelongsTo(const std::filesystem::path& _path) const
@@ -179,6 +182,7 @@ namespace ProjectManager
 
         yyjson_doc_free(doc);
 
-        m_archiveMap.emplace(fullPath, archive);
+        // Replaces a previously loaded version, when forced after the archive file changed.
+        m_archiveMap[fullPath] = archive;
     }
 }

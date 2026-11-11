@@ -148,36 +148,45 @@ namespace ProjectManager
             sqlite3_stmt* stmt;
             for (IAssetPipeline* pipeline : m_pipelines)
             {
-                bool matchedVersions = false;
-                snprintf(sql, sizeof(sql), "SELECT version, id FROM assetPipelines WHERE name = '%s'", pipeline->GetName().data());
+                // One row per pipeline, whose id stays stable across versions: cooked assets and probing refer to
+                // the pipeline by it. Each cooked asset stores the version it was cooked with, which is what
+                // triggers recooks.
+                bool found = false;
+                snprintf(sql, sizeof(sql), "SELECT version, id FROM assetPipelines WHERE name = '%s' ORDER BY id LIMIT 1", pipeline->GetName().data());
                 KE_VERIFY(m_database->Prepare(sql, &stmt) == SQLITE_OK);
                 if (sqlite3_step(stmt) == SQLITE_ROW)
                 {
                     KE_ASSERT(sqlite3_column_count(stmt) == 2);
                     KE_ASSERT(sqlite3_column_type(stmt, 0) == SQLITE_INTEGER);
                     const KryneEngine::u64 version = sqlite3_column_int64(stmt, 0);
-                    if (pipeline->GetVersion() == version)
-                    {
-                        const KryneEngine::u32 id = sqlite3_column_int(stmt, 1);
-                        m_pipelineIds.insert({ id, pipeline });
-                        matchedVersions = true;
-                    }
-                    else
+                    const KryneEngine::u32 id = sqlite3_column_int(stmt, 1);
+                    sqlite3_finalize(stmt);
+                    found = true;
+                    m_pipelineIds.insert({ id, pipeline });
+
+                    if (pipeline->GetVersion() != version)
                     {
                         Logger::GetInstance()->LogFormatted(
                             LogSeverity::Info, kLogCategory,
-                            "Pipeline '%s' version mismatch, recooking", pipeline->GetName());
+                            "Pipeline '%s' version mismatch, recooking", pipeline->GetName().data());
+
+                        snprintf(sql, sizeof(sql), "UPDATE assetPipelines SET version = %llu WHERE id = %u", pipeline->GetVersion(), id);
+                        KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
                     }
+
+                    // Older databases got a new row on every version change.
+                    snprintf(sql, sizeof(sql), "DELETE FROM assetPipelines WHERE name = '%s' AND id != %u", pipeline->GetName().data(), id);
+                    KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
                 }
                 else
                 {
+                    sqlite3_finalize(stmt);
                     Logger::GetInstance()->LogFormatted(
                         LogSeverity::Info, kLogCategory,
-                        "No record for pipeline '%s', assume new", pipeline->GetName());
+                        "No record for pipeline '%s', assume new", pipeline->GetName().data());
                 }
-                sqlite3_finalize(stmt);
 
-                if (matchedVersions)
+                if (found)
                     continue;
 
                 snprintf(
@@ -419,20 +428,21 @@ namespace ProjectManager
             KE_VERIFY(m_database->Execute(sql) == SQLITE_OK);
         }
 
+           // Loaded even when up to date: finished cooks look archives up in the map to queue their rebuild.
+        if (pipeline == m_archiver.get())
+        {
+            std::unique_lock lock { m_queueMutex };
+            m_archiver->m_pipelineId = pipelineId;
+            m_archiver->LoadArchive(
+                parent,
+                std::filesystem::relative(_asset, parent),
+                m_outputDirectory,
+                assetId,
+                true);
+        }
+
         if (!upToDate)
         {
-            if (pipeline == m_archiver.get())
-            {
-                std::unique_lock lock { m_queueMutex };
-                m_archiver->m_pipelineId = pipelineId;
-                m_archiver->LoadArchive(
-                    parent,
-                    std::filesystem::relative(_asset, parent),
-                    m_outputDirectory,
-                    assetId,
-                    true);
-            }
-
             Enqueue(QueueEntry {
                 .m_asset = _asset,
                 .m_assetDirectory = parent,
