@@ -99,6 +99,9 @@ namespace ProjectManager
         eastl::vector_map<std::filesystem::path, KryneEngine::u32> m_cookingAssets;
         eastl::vector_map<KryneEngine::u32, QueueEntry*> m_cookingArchives;
         eastl::vector<SupportWork*> m_supportWorkRequests;
+        /// Archives wait for it, as the queue empties often while the initial probe still finds assets to cook.
+        /// Guarded by `m_queueMutex`.
+        bool m_initialProbeDone = false;
 
         eastl::vector<std::filesystem::path> m_cookingAssetPerThread;
         KryneEngine::SpinLock m_cookedAssetsLock;
@@ -113,6 +116,9 @@ namespace ProjectManager
         void ProbeInputAsset(const std::filesystem::path& _asset, const std::filesystem::path& _assetDirectory = {});
 
         void ProbeOutputAsset(const std::filesystem::path& _asset);
+
+        /// Archives are cooked once the initial probe is done and no asset is cooking. Call with `m_queueMutex` held.
+        [[nodiscard]] bool IsArchiveWorkReady() const;
 
         /// Probes every input asset whose last cook depended on `_file`, after `_file` was created, modified or removed.
         void ProbeDependentAssets(const std::filesystem::path& _file);
